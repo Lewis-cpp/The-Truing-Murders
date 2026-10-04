@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="The Truing Murders 技术栈 README：项目定位、前后端与数据库选型、AI 接入方式、架构边界、开发路线，依据 docs/ 下 16 篇设计文档整理。">
+  <title>The Truing Murders · 技术栈 README</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
+  <style>
+    :root { color-scheme: light; --ink: #192c34; --muted: #54676c; --line: #d6dfdc; --paper: #f5f6f1; --green: #116854; --purple: #6751a3; --amber: #94631a; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 30px; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; font-size: 15px; line-height: 1.75; }
+    a { color: inherit; text-underline-offset: 4px; }
+    a:hover { color: var(--green); }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--purple); outline-offset: 5px; }
+    code { font-family: "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace; font-size: .84em; overflow-wrap: anywhere; background: #edf2ec; border: 1px solid #d5e0d6; border-radius: 5px; padding: 1px 6px; }
+    .wrap { width: min(1240px, calc(100% - 64px)); margin: auto; }
+    header { border-bottom: 1px solid var(--line); }
+    .topbar { min-height: 80px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 13px; letter-spacing: .08em; font-weight: 750; text-decoration: none; }
+    .mark { width: 36px; height: 36px; display: grid; place-items: center; background: var(--ink); color: white; font-size: 13px; letter-spacing: -.08em; border-radius: 50%; }
+    nav { display: flex; flex-wrap: wrap; gap: 18px 20px; font-size: 13px; }
+    nav a { text-decoration: none; color: var(--muted); }
+    nav a:hover { color: var(--green); }
+    .hero { padding: 62px 0 34px; }
+    .eyebrow { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 750; }
+    .hero-grid { display: grid; grid-template-columns: 1fr 320px; gap: 52px; align-items: end; }
+    h1 { margin: 18px 0 20px; font-size: clamp(32px, 4.2vw, 54px); line-height: 1.27; letter-spacing: -.045em; font-weight: 800; }
+    h1 span { color: var(--green); }
+    .lead { color: var(--muted); max-width: 780px; margin: 0; font-size: 16px; }
+    .project-title { margin: 0 0 9px; font-size: 15px; font-weight: 700; }
+    .status { border-left: 2px solid var(--green); padding: 4px 0 4px 22px; font-size: 13px; }
+    .status p { margin: 9px 0 0; color: var(--muted); }
+    .pill { display: inline-block; border: 1px solid #bfd4c9; border-radius: 20px; padding: 2px 10px; color: var(--green); background: #e9f1e9; font-size: 11px; font-weight: 750; }
+    .pill.purple { border-color: #cfc6e6; color: var(--purple); background: #efebf8; }
+    .pill.amber { border-color: #e3cba0; color: var(--amber); background: #f6efdf; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); background: #fffef9; margin-top: 36px; border-radius: 12px; overflow: hidden; }
+    .metric { padding: 18px 24px; border-right: 1px solid var(--line); }
+    .metric:last-child { border: 0; }
+    .metric strong { font-size: 30px; line-height: 1.2; font-weight: 650; }
+    .metric span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+    section { padding: 34px 0; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 25px; margin-bottom: 18px; }
+    h2 { margin: 0; font-size: 25px; letter-spacing: -.035em; line-height: 1.4; }
+    h2 i { color: var(--green); font-size: 22px; vertical-align: -2px; margin-right: 10px; }
+    .num { color: var(--green); font-size: 12px; letter-spacing: .06em; margin-right: 12px; vertical-align: middle; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0; }
+    .panel { background: #fffefa; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .panel-pad { padding: 22px 24px; }
+    .panel-top { padding: 15px 24px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 12px; align-items: center; }
+    .panel-top b { font-size: 13px; }
+    .panel-top .ri { color: var(--muted); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    .grid2:first-child { margin-top: 0; }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; background: #fffefa; }
+    h3 { margin: 0 0 9px; font-size: 16px; line-height: 1.5; }
+    p { margin: 0 0 10px; }
+    .card p, .panel p, li p { color: var(--muted); font-size: 13px; margin: 0; }
+    .callout { margin-top: 16px; padding: 16px 20px; border-left: 3px solid var(--green); background: #eaf1e9; border-radius: 0 8px 8px 0; font-size: 13px; }
+    .callout.purple { border-left-color: var(--purple); background: #f0ecf8; }
+    .callout.amber { border-left-color: var(--amber); background: #f6efdf; }
+    .callout b { display: block; margin-bottom: 4px; }
+    .callout p { color: inherit; }
+    ol, ul { padding-left: 22px; margin: 0; }
+    li { padding: 3px 0; }
+    .muted-list { color: var(--muted); font-size: 13px; }
+    /* 项目简介 */
+    .budget { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fffefa; }
+    .budget div { padding: 18px 22px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .budget div:nth-child(3n) { border-right: 0; }
+    .budget div:nth-last-child(-n+3) { border-bottom: 0; }
+    .budget strong { font-size: 24px; font-weight: 650; display: block; }
+    .budget span { color: var(--muted); font-size: 12px; }
+    .loop { display: grid; grid-template-columns: repeat(6, 1fr); counter-reset: step; margin-top: 20px; }
+    .loop div { counter-increment: step; padding: 18px 16px; border-right: 1px solid var(--line); background: #fffefa; }
+    .loop div:last-child { border-right: 0; }
+    .loop div::before { content: "0" counter(step); display: block; color: var(--green); font-size: 11px; font-weight: 750; letter-spacing: .08em; margin-bottom: 8px; }
+    .loop b { display: block; font-size: 13px; margin-bottom: 4px; }
+    .loop span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    /* 技术栈卡片 */
+    .layers { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .layer { border: 1px solid var(--line); border-radius: 14px; background: #fffefa; overflow: hidden; }
+    .layer-head { display: flex; align-items: center; gap: 12px; padding: 16px 22px; border-bottom: 1px solid var(--line); background: #f9faf5; }
+    .layer-head i { font-size: 20px; color: var(--green); }
+    .layer-head.ai i { color: var(--purple); }
+    .layer-head b { font-size: 15px; }
+    .layer-head span { margin-left: auto; color: var(--muted); font-size: 11px; letter-spacing: .08em; }
+    .layer ul { list-style: none; padding: 6px 22px 14px; margin: 0; }
+    .layer li { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px dashed #e4eae4; }
+    .layer li:last-child { border-bottom: 0; }
+    .logo, .logo-ico { flex: 0 0 22px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; align-self: center; }
+    .logo img { width: 18px; height: 18px; display: block; }
+    .logo-ico i { font-size: 18px; line-height: 1; }
+    .layer li b { font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .layer li span { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+    .layer li span code { font-size: .86em; }
+    .layer-note { padding: 10px 22px 16px; color: var(--muted); font-size: 12px; }
+    .layer-note i { color: var(--amber); margin-right: 6px; }
+    /* 架构 */
+    .arch { padding: 22px 24px; display: grid; gap: 0; }
+    .arch-tier { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; background: #fffefa; }
+    .arch-tier b { font-size: 14px; }
+    .arch-tier b code { margin-left: 8px; }
+    .arch-tier p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+    .arch-tier.ext { background: #f7f3fc; border-color: #d8cff0; }
+    .arch-arrow { text-align: center; color: var(--green); font-size: 16px; padding: 2px 0; }
+    .arch-arrow small { display: block; color: var(--muted); font-size: 11px; letter-spacing: .06em; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; font-weight: 700; background: #edf1ea; color: #3b5357; }
+    th, td { padding: 13px 20px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td:first-child { font-weight: 700; min-width: 150px; }
+    td code { line-height: 1.9; }
+    /* 状态机与谎言 */
+    .states { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 4px; }
+    .state-chip { border: 1px solid #bfd4c9; background: #e9f1e9; color: var(--green); border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 750; font-family: "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace; }
+    .state-chip.transient { border-color: #cfc6e6; background: #efebf8; color: var(--purple); border-style: dashed; }
+    .state-sep { color: var(--muted); font-size: 13px; }
+    .policy { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 14px; }
+    .policy div { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fffefa; }
+    .policy code { display: block; background: none; border: 0; padding: 0; font-size: 12px; font-weight: 700; color: var(--purple); white-space: nowrap; }
+    .policy span { color: var(--muted); font-size: 12px; line-height: 1.55; display: block; margin-top: 4px; }
+    .poll { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+    .poll .state-chip { font-size: 11px; }
+    /* 明确不用 */
+    .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 20px 24px; }
+    .chip { border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 0 10px 10px 0; padding: 13px 16px; background: #fffefa; }
+    .chip.soft { border-left: 3px solid #b8c6c0; }
+    .chip b { font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+    .chip b i { color: var(--amber); font-size: 15px; }
+    .chip.soft b i { color: #7d918a; }
+    .chip p { color: var(--muted); font-size: 12px; margin: 4px 0 0; line-height: 1.6; }
+    /* 路线图 */
+    .roadmap { display: grid; grid-template-columns: repeat(6, 1fr); counter-reset: stage; }
+    .milestone { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 20px 17px; counter-increment: stage; }
+    .milestone:nth-child(-n+6) { border-bottom: 0; }
+    .milestone:last-child { border-right: 0; }
+    .milestone::before { content: "0" counter(stage); display: block; color: var(--green); font-size: 12px; font-weight: 700; margin-bottom: 14px; }
+    .milestone h3 { font-size: 14px; }
+    .milestone p { font-size: 12px; color: var(--muted); margin: 0; }
+    .prios { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; }
+    .prios .card h3 { font-size: 14px; margin-bottom: 6px; }
+    /* 文档索引 */
+    .docs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 20px 24px; }
+    .doc-link { border: 1px solid var(--line); border-radius: 10px; padding: 13px 16px; background: #fffefa; text-decoration: none; display: block; }
+    .doc-link:hover { border-color: #bfd4c9; background: #f4f7f2; color: inherit; }
+    .doc-link em { display: block; font-style: normal; color: var(--green); font-size: 11px; font-weight: 750; letter-spacing: .06em; }
+    .doc-link b { display: block; font-size: 13.5px; margin: 3px 0 2px; }
+    .doc-link span { color: var(--muted); font-size: 12px; line-height: 1.5; display: block; }
+    footer { border-top: 1px solid var(--line); margin-top: 24px; padding: 23px 0 35px; color: var(--muted); font-size: 11.5px; }
+    .footer-line { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    .source-note { color: var(--muted); font-size: 12px; margin: 14px 0 0; }
+    @media (max-width: 980px) { .loop, .policy { grid-template-columns: repeat(3, 1fr); } .loop div:nth-child(3) { border-right: 0; } .loop div:nth-child(-n+3) { border-bottom: 1px solid var(--line); } }
+    @media (max-width: 850px) {
+      .wrap { width: calc(100% - 32px); } .topbar { padding: 18px 0; flex-wrap: wrap; }
+      .hero { padding-top: 35px; } .hero-grid { grid-template-columns: 1fr; gap: 22px; } .status { max-width: 620px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); } .metric { border-bottom: 1px solid var(--line); } .metric:nth-child(2n) { border-right: 0; } .metric:nth-child(n+4) { border-bottom: 0; }
+      .layers, .grid2, .chips { grid-template-columns: 1fr; }
+      .budget { grid-template-columns: 1fr 1fr; } .budget div { border-bottom: 1px solid var(--line) !important; } .budget div:nth-child(3n) { border-right: 1px solid var(--line); } .budget div:nth-child(2n) { border-right: 0; } .budget div:nth-child(n+5) { border-bottom: 0 !important; }
+      .section-head { display: block; } .section-head .sub { margin-top: 8px; }
+      .prios, .docs-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 520px) { .loop, .policy, .budget, .prios, .docs-grid { grid-template-columns: 1fr 1fr; } .metrics { grid-template-columns: 1fr 1fr; } .loop div, .policy div, .budget div { border-right: 1px solid var(--line) !important; } .loop div:nth-child(2n), .policy div:nth-child(2n), .budget div:nth-child(2n), .docs-grid div:nth-child(2n) { border-right: 0 !important; } .docs-grid { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap topbar">
+    <a class="brand" href="#"><span class="mark">TM</span>THE TRUING MURDERS</a>
+    <nav>
+      <a href="#intro">简介</a>
+      <a href="#stack">技术栈</a>
+      <a href="#architecture">架构</a>
+      <a href="#ai">AI 接入</a>
+      <a href="#rules">规则与谎言</a>
+      <a href="#excluded">不用什么</a>
+      <a href="#roadmap">路线图</a>
+      <a href="#docs">文档</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Project README · Tech Stack</p>
+    <div class="hero-grid">
+      <div>
+        <h1>The Truing Murders <span>技术栈</span></h1>
+        <p class="lead">单人单案件的交互式 AI 探案游戏：玩家扮演侦探，探索场景、审讯 AI 嫌疑人、用证据击破预设谎言链，最终提交结构化指控并由确定性规则判定。本页相当于一份面向读者的 README，内容依据 <code>docs/</code> 下 16 篇设计文档整理，待定项均已标注。</p>
+      </div>
+      <div class="status">
+        <p class="project-title">基于多智能体与状态机的交互式 AI 探案推理解谜平台（暂定名）</p>
+        <p><span class="pill">设计基线 · 编码未启动</span> <span class="pill purple">LLM 仅负责表达</span></p>
+        <p>核心原则：<b>程序决定并保存游戏结果，模型只表达已经获准的内容</b>。首先是软件工程系统，其次才是 LLM 应用。</p>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><strong>21</strong><span>数据库表（静态 9 · 运行 8 · 对话 4）</span></div>
+      <div class="metric"><strong>≈32</strong><span>REST 端点（/api/v1，纯 HTTP 轮询）</span></div>
+      <div class="metric"><strong>9</strong><span>pytest 测试标记（默认零模型调用）</span></div>
+      <div class="metric"><strong>6</strong><span>开发阶段（从领域闭环到完整 MVP）</span></div>
+      <div class="metric"><strong>12</strong><span>风险项（R01–R12，全部 P0）</span></div>
+    </div>
+  </div>
+
+  <section id="intro">
+    <div class="section-head">
+      <h2><i class="ri-compass-3-line"></i><span class="num">01</span>项目是什么</h2>
+      <p class="sub">玩法定位与 MVP 内容预算 · 详见 01 / 02</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>一局完整的探案推理</h3>
+        <p>玩家在固定案件中探索场景、收集证据，用自由文本审讯 AI 扮演的嫌疑人；NPC 可以逐层隐瞒秘密，玩家需要用不同证据逐层突破谎言链，查看人物关系图与时间线，最终提交「凶手 / 凶器 / 动机 / 作案过程」的结构化指控。判定由确定性规则完成，给出正确、部分正确或错误，并展示完整复盘。</p>
+        <p>MVP 是毕业设计交付物：优先 1920×1080 桌面端、单人无账号（匿名 Cookie 识别访问者），一条无招供的正确通关路径必须存在。</p>
+      </div>
+      <div class="card">
+        <h3>为什么它不只是「套壳大模型」</h3>
+        <p>游戏事实全部由程序持有：证据、谎言层级、情绪与数值、披露时机都在数据库与规则引擎里。LLM 无权改变任何游戏事实，只负责把「程序获准的说法」表达得像这个角色——可解释的分层谎言与程序控制的事实披露是本项目的核心设计。</p>
+        <p>因此整个系统不依赖模型涌现能力来「当裁判」：评分、状态推进、披露、存档全部可复现、可测试。</p>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-gamepad-line"></i> 玩法循环</b><span>一轮游戏 = 探索 → 审讯 → 指控 → 复盘</span></div>
+      <div class="loop">
+        <div><b>探索场景</b><span>4 个调查场景，按状态机解锁</span></div>
+        <div><b>收集证据</b><span>12 条证据（5 条关键），入证据背包</span></div>
+        <div><b>审讯嫌疑人</b><span>自由文本对话 4 个 NPC，情绪 / 压力 / 信任变化</span></div>
+        <div><b>出示证据</b><span>击破分层谎言，触发程序控制的披露</span></div>
+        <div><b>提交指控</b><span>凶手 / 凶器 / 动机 / 作案过程结构化草稿</span></div>
+        <div><b>规则判定</b><span>纯规则评分 + 完整复盘展示</span></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-price-tag-3-line"></i> MVP 内容预算</b><span>边界已定，具体内容由案件配置确定</span></div>
+      <div class="budget">
+        <div><strong>1</strong><span>个固定案件（离线 JSON 定义，版本化导入）</span></div>
+        <div><strong>4</strong><span>个可审讯 NPC（共用一套生成实现，按人格区分）</span></div>
+        <div><strong>4</strong><span>个调查场景</span></div>
+        <div><strong>12</strong><span>条证据，其中 5 条关键证据</span></div>
+        <div><strong>3</strong><span>条谎言链（分层谎言，逐级击破）</span></div>
+        <div><strong>4 + 2</strong><span>种 NPC 情绪 + 压力 / 信任两个数值</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stack">
+    <div class="section-head">
+      <h2><i class="ri-stack-line"></i><span class="num">02</span>技术栈总览</h2>
+      <p class="sub">每层选型 + 一句话理由 · 版本与供应商以最终实施为准</p>
+    </div>
+    <div class="layers">
+      <div class="layer">
+        <div class="layer-head"><i class="ri-layout-grid-line"></i><b>前端</b><span>FRONTEND</span></div>
+        <ul>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/vuedotjs/42b883" alt=""></span><b>Vue 3 + TypeScript</b><span>SPA 单页应用，Composition API，类型安全贯穿组件与 Pinia Store。</span></li>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/typescript/3178c6" alt=""></span><b>Element Plus</b><span>UI 组件库：抽屉、时间线、标签页、骨架屏等案卷工作台组件。</span></li>
+          <li><span class="logo-ico"><i class="ri-pie-chart-line" style="color:#aa344d"></i></span><b>ECharts</b><span>人物关系图（graph 系列）与时间线（散点 / 区间带 / custom 系列）。</span></li>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/pinia/94631a" alt=""></span><b>Pinia</b><span>3 个 Setup Store：game / conversation / workspace。</span></li>
+          <li><span class="logo-ico"><i class="ri-route-line" style="color:var(--green)"></i></span><b>Vue Router</b><span>history 模式，路由表完整定义。</span></li>
+          <li><span class="logo-ico"><i class="ri-links-line" style="color:var(--green)"></i></span><b>原生 fetch</b><span>不做请求缓存框架；对话生成状态用 1.5 秒轮询。</span></li>
+          <li><span class="logo-ico"><i class="ri-palette-line" style="color:var(--green)"></i></span><b>原生 CSS</b><span>grid 布局 + 主题变量，深色「侦探档案工作台」配色；动效只用 CSS 过渡。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>未引入：axios、WebSocket 客户端、Tailwind、动效库。构建工具文档未指定。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head"><i class="ri-server-line"></i><b>后端</b><span>BACKEND</span></div>
+        <ul>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/python/3776ab" alt=""></span><b>Python + FastAPI</b><span>模块化单体（非微服务），入口 <code>backend.main:app</code>。</span></li>
+          <li><span class="logo-ico"><i class="ri-terminal-box-line" style="color:var(--green)"></i></span><b>Uvicorn</b><span>单异步进程 ASGI 服务器，开发态 <code>--reload</code>。</span></li>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/sqlalchemy/d71f00" alt=""></span><b>SQLAlchemy</b><span>ORM + Session 事务边界；不引入 Unit of Work 框架。</span></li>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/pydantic/e92063" alt=""></span><b>Pydantic</b><span><code>api/schemas/</code> 请求 / 响应模型与校验。</span></li>
+          <li><span class="logo-ico"><i class="ri-arrow-right-up-line" style="color:var(--green)"></i></span><b>Alembic</b><span>数据库迁移：<code>alembic.ini</code> + <code>migrations/versions/</code>。</span></li>
+          <li><span class="logo-ico"><i class="ri-function-line" style="color:var(--purple)"></i></span><b>纯函数领域层</b><span>状态机用标准库 <code>Enum</code> + <code>dataclass</code> 实现，不用第三方状态机库。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>分层固定为 api / application / domain / infrastructure 四层；离线导入 CLI <code>import_case.py</code> 负责案件发布。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head"><i class="ri-database-line"></i><b>数据库</b><span>DATABASE</span></div>
+        <ul>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/postgresql/4169e1" alt=""></span><b>PostgreSQL（建议基线）</b><span>以 PG 18 为能力参照；关系表 + JSONB。MySQL 8.4 为备选，实施时二选一。</span></li>
+          <li><span class="logo-ico"><i class="ri-stack-line" style="color:var(--green)"></i></span><b>21 张表</b><span>静态案件 9 + 运行状态 8 + 对话 / 计量 / 摘要 4。</span></li>
+          <li><span class="logo-ico"><i class="ri-key-2-line" style="color:var(--green)"></i></span><b>复合外键 + 部分唯一索引</b><span>复合外键锁定「同局同版本」；部分唯一索引保证同局最多一个生成中的 NPC 轮次。</span></li>
+          <li><span class="logo-ico"><i class="ri-git-commit-line" style="color:var(--green)"></i></span><b>事务隔离</b><span>写入 READ COMMITTED + 行锁；恢复读取 REPEATABLE READ。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>明确不引入 Redis、向量数据库、消息队列；SQLite 不能替代行锁 / 隔离级别验收，不用于测试。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head ai"><i class="ri-openai-line"></i><b>AI / LLM 接入</b><span>AI LAYER</span></div>
+        <ul>
+          <li><span class="logo-ico"><i class="ri-robot-2-line" style="color:var(--purple)"></i></span><b>自研 LLM Gateway</b><span>类名 <code>LLMClient</code>，全项目唯一可发起模型请求的位置，主备双模型路由。</span></li>
+          <li><span class="logo-ico"><i class="ri-openai-line" style="color:var(--purple)"></i></span><b>OpenAI 兼容 API</b><span>供应商与具体模型未定，仅约定接口风格；密钥只存在于后端。</span></li>
+          <li><span class="logo-ico"><i class="ri-file-settings-line" style="color:var(--purple)"></i></span><b>结构化输出</b><span>JSON Schema 约束，最小输出 <code>{"text": string}</code>，拒绝工具调用与额外字段。</span></li>
+          <li><span class="logo-ico"><i class="ri-brain-line" style="color:var(--purple)"></i></span><b>自研三级记忆</b><span>近 6 轮全文 + 程序式摘要 + 结构化 NPC 状态；不用向量检索。</span></li>
+          <li><span class="logo-ico"><i class="ri-shield-keyhole-line" style="color:var(--purple)"></i></span><b>受限编排</b><span>AgentManager 白名单角色路由（NPC / HOST / REVIEW），生成需校验 GenerationPermit。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>不用 LangChain / LangGraph 等 Agent 框架（未引入，明确不建通用 Agent 平台）；RAG / Embedding 明确不进 MVP；Judge Agent 已取消，评分归规则引擎。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head"><i class="ri-links-line"></i><b>API 与通信</b><span>API &amp; REALTIME</span></div>
+        <ul>
+          <li><span class="logo-ico"><i class="ri-global-line" style="color:var(--green)"></i></span><b>纯 REST</b><span>基础路径 <code>/api/v1</code>，约 32 个资源化端点，GET 一律只读。</span></li>
+          <li><span class="logo-ico"><i class="ri-timer-line" style="color:var(--green)"></i></span><b>HTTP 轮询</b><span>无 WebSocket / SSE；前端建议 1.5 秒轮询会话五态（PREPARING / GENERATING / COMPLETED / FALLBACK / STALE）。</span></li>
+          <li><span class="logo-ico"><i class="ri-fingerprint-line" style="color:var(--green)"></i></span><b>幂等与并发</b><span><code>Idempotency-Key</code> 请求头 + <code>X-Expected-State-Version</code> 乐观并发头 + 一次性效果键。</span></li>
+          <li><span class="logo-ico"><i class="ri-error-warning-line" style="color:var(--green)"></i></span><b>统一错误外壳</b><span>稳定错误码目录约 40 个；<code>View&lt;T&gt;</code> / <code>ActionResult&lt;T&gt;</code> 响应外壳；字段 snake_case。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>SSE 实时推送与流式回复（打字机）只是后续增强提案，当前 API 不提供。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head"><i class="ri-test-tube-line"></i><b>测试与质量</b><span>QUALITY</span></div>
+        <ul>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/pytest/0a9edc" alt=""></span><b>pytest</b><span>9 个 marker：unit / integration / agent / rule / state_machine / api / e2e / live_llm / performance，<code>--strict-markers</code>。</span></li>
+          <li><span class="logo-ico"><i class="ri-cursor-line" style="color:var(--green)"></i></span><b>pytest-playwright</b><span>E2E 阶段真实启动 Vue、FastAPI 与目标数据库；真实模型评测需显式 <code>RUN_LIVE_LLM_TESTS=1</code>。</span></li>
+          <li><span class="logo"><img src="https://cdn.simpleicons.org/ruff/d9a514" alt=""></span><b>Ruff</b><span><code>ruff format --check</code> + <code>ruff check</code>，配置集中在 <code>pyproject.toml</code>。</span></li>
+          <li><span class="logo-ico"><i class="ri-flask-line" style="color:var(--green)"></i></span><b>用例编号体系</b><span>U / R / SM / AG / IT / API / E2E 七族编号，固定回复模式下必须可完整通关。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>pytest-cov 可选；前端单测框架（Vitest 等）文档未提及。</div>
+      </div>
+      <div class="layer">
+        <div class="layer-head"><i class="ri-shield-check-line"></i><b>安全与部署</b><span>SECURITY &amp; OPS</span></div>
+        <ul>
+          <li><span class="logo-ico"><i class="ri-lock-line" style="color:var(--green)"></i></span><b>匿名 Cookie</b><span>高熵令牌 + <code>HttpOnly; Secure; SameSite=Lax</code>，库中只存 SHA-256 摘要；无 JWT / OAuth。</span></li>
+          <li><span class="logo-ico"><i class="ri-shield-keyhole-line" style="color:var(--green)"></i></span><b>输入防线</b><span>Origin 校验、请求体 64 KiB 上限、<code>Cache-Control: no-store</code>；模型输出严格 Schema + 内容双重校验。</span></li>
+          <li><span class="logo-ico"><i class="ri-cloud-line" style="color:var(--green)"></i></span><b>部署形态</b><span>一个后端进程 + 一个数据库，前端静态部署、建议同源；配置走 <code>.env</code>（密钥仅后端持有）。</span></li>
+          <li><span class="logo-ico"><i class="ri-database-line" style="color:var(--green)"></i></span><b>备份与恢复</b><span>每日一致性逻辑备份，RPO ≤ 24h、RTO 1 小时演练目标。</span></li>
+        </ul>
+        <div class="layer-note"><i class="ri-error-warning-line"></i>Docker / docker-compose / 反向代理文档未提及；12 类风险（R01 提示注入 ～ R12 数据库异常）全部按 P0 处置。</div>
+      </div>
+      <div class="layer" style="grid-column: 1 / -1;">
+        <div class="layer-head"><i class="ri-gamepad-line"></i><b>游戏内容与状态</b><span>GAME CONTENT</span></div>
+        <ul>
+          <li><span class="logo-ico"><i class="ri-article-line" style="color:var(--green)"></i></span><b>离线案件包</b><span><code>assets/cases/case_001/v1/case.json</code>，版本化，经 CLI 导入后发布；运行时账号对静态表只读。</span></li>
+          <li><span class="logo-ico"><i class="ri-git-commit-line" style="color:var(--green)"></i></span><b>自动存档</b><span>会话级状态全部落库，状态版本号 <code>state_version</code> 乐观并发；恢复读取与写入隔离级别分离。</span></li>
+          <li><span class="logo-ico"><i class="ri-book-open-line" style="color:var(--green)"></i></span><b>复盘投影</b><span>证据背包、关系图、时间线均为「玩家可见安全投影」，由证据引擎统一裁剪，不泄露未获准信息。</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="source-note">来源：01 / 03 / 09 / 10 / 11 / 13 / 14 / 15。所有「未引入」「未提及」项见第 06 节。</p>
+  </section>
+
+  <section id="architecture">
+    <div class="section-head">
+      <h2><i class="ri-apps-2-line"></i><span class="num">03</span>系统架构</h2>
+      <p class="sub">模块化单体 · 领域驱动 · 详见 03 / 04 / 15</p>
+    </div>
+    <div class="panel">
+      <div class="panel-top"><b><i class="ri-stack-line"></i> 分层结构</b><span>Vue 3 SPA ⇄ FastAPI 模块化单体 ⇄ PostgreSQL ⇄ 外部 LLM API</span></div>
+      <div class="arch">
+        <div class="arch-tier ext"><b>外部模型 API</b><p>OpenAI 兼容接口 · 主备双模型 · 只有 LLM Gateway 可以触达</p></div>
+        <div class="arch-arrow">↑<small>唯一出口</small></div>
+        <div class="arch-tier"><b>前端 <code>Vue 3 SPA</code></b><p>Element Plus + ECharts + Pinia · 只通过 REST 轮询与后端通信</p></div>
+        <div class="arch-arrow">↑<small>/api/v1 · REST + 轮询</small></div>
+        <div class="arch-tier"><b>API 层 <code>api/</code></b><p>FastAPI 路由 · Pydantic 契约 · Origin / Cookie 鉴权 · 幂等头解析</p></div>
+        <div class="arch-arrow">↑</div>
+        <div class="arch-tier"><b>应用层 <code>application/</code></b><p>Game Engine 用例编排 · 授权与幂等 · 事务边界 · Agent Manager · Memory Service · 生成子流程 generation.py</p></div>
+        <div class="arch-arrow">↑</div>
+        <div class="arch-tier"><b>领域层 <code>domain/</code></b><p>状态机 · 证据引擎 · 规则引擎 · 谎言系统 · 三聚合根：CaseTemplate（发布后不可变）/ GameSession / Conversation</p></div>
+        <div class="arch-arrow">↑</div>
+        <div class="arch-tier"><b>基础设施层 <code>infrastructure/</code></b><p>仓储（SQLAlchemy）· LLM Gateway（LLMClient）· 结构化 NPC 状态存取</p></div>
+        <div class="arch-arrow">↑</div>
+        <div class="arch-tier"><b>PostgreSQL</b><p>21 张表 · 复合外键锁同局同版本 · 行锁 + 乐观版本</p></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-list-settings-line"></i> 核心模块与职责</b><span>落点见 15 · 模块路径为规划位置</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>模块</th><th>职责</th></tr></thead>
+          <tbody>
+            <tr><td>Game Engine<br><code>application/game.py</code></td><td>用例编排、授权、幂等、事务边界；写用例的唯一事务持有者。</td></tr>
+            <tr><td>State Machine<br><code>domain/state_machine.py</code></td><td>9 个概念阶段、动作允许表、转换守卫；纯标准库实现。</td></tr>
+            <tr><td>Evidence Engine<br><code>domain/evidence.py</code></td><td>证据持有 / 引用校验、获批披露应用，背包 / 关系图 / 时间线的玩家可见安全投影。</td></tr>
+            <tr><td>Rule Engine<br><code>domain/rules.py</code></td><td>纯 Python 确定性规则：EVENT 白名单触发 → 数值先求和再截断 → 谎言击破 → 承认判定 → 披露 → 一次 PROGRESS；独立评分分支；一次性效果键去重。</td></tr>
+            <tr><td>谎言系统<br><code>domain/lies/</code></td><td>分层谎言状态与 LieChain 线性分链；程序选定表达策略组成 ResponsePlan，LLM 不得更换借口或扩大承认。</td></tr>
+            <tr><td>Agent Manager<br><code>application/agents.py</code></td><td>受限角色路由（NPC / HOST / REVIEW 白名单），校验 GenerationPermit 后调用唯一 Gateway；自身无 DB Session、无规则引用。</td></tr>
+            <tr><td>Memory Service<br><code>application/memory.py</code></td><td>三级记忆装配 <code>build_context()</code>、程序式摘要 <code>summarize_history()</code>、结构化状态更新；<code>memory_epoch</code> 标记授权段，授权变化即失效旧对话记忆。</td></tr>
+            <tr><td>Conversation Service<br><code>application/conversation.py</code></td><td>输出结构与内容双重校验，失败固定降级；不让另一个模型当审核员。</td></tr>
+            <tr><td>LLM Gateway<br><code>infrastructure/llm_client.py</code></td><td>全项目唯一模型请求出口：主备路由、超时、熔断、严格 JSON 校验、usage 归一化。</td></tr>
+            <tr><td>Case Service / Save-Load</td><td>固定案件版本载入校验 / 一致快照装配与版本兼容检查。</td></tr>
+            <tr><td>generation.py</td><td>Game Engine 的表达生成子流程：占位、额度预留、DISPATCHING 条件抢占、计量结算、过期清理。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="callout">
+      <b>关键机制：双事务提交</b>
+      <p>事务 A 提交规则效果 → 事务外调用模型（调用期间不持有任何数据库锁）→ 事务 B 保存表达与用量。业务状态版本 <code>state_version</code> 与生成状态彼此分离，模型故障不会污染游戏事实。</p>
+    </div>
+  </section>
+
+  <section id="ai">
+    <div class="section-head">
+      <h2><i class="ri-openai-line"></i><span class="num">04</span>AI 接入方式</h2>
+      <p class="sub">受限生成 · 可复现 · 详见 07 / 08 / 12 / 13</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>上下文预算（设计初值，待实测）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>项</th><th>预算</th></tr></thead>
+            <tbody>
+              <tr><td>输入上限</td><td>4,000 tokens</td></tr>
+              <tr><td>输出上限</td><td>400 tokens</td></tr>
+              <tr><td>近期历史 + 摘要</td><td>1,100 tokens（摘要 ≤ 300）</td></tr>
+              <tr><td>单轮问题建议</td><td>500 tokens</td></tr>
+              <tr><td>整轮 deadline</td><td>30 秒（待实测初值）</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top: 10px;">超出预算按程序裁剪，不靠模型自觉；输出超长按固定降级处理。</p>
+      </div>
+      <div class="card">
+        <h3>调用控制</h3>
+        <ul class="muted-list">
+          <li>每个命令最多 1 次上游调用；显式重试 ≤ 2 次，SDK 自动重试设为 0。</li>
+          <li>熔断：连续 3 次故障冷却 60 秒。</li>
+          <li>本地并发信号量建议 4；主备双模型路由。</li>
+          <li>所有调用计量入库（token 用量归一化），按会话结算。</li>
+          <li>HOST / REVIEW 默认由 Python 固定文本提供，按需才润色。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-brain-line"></i> 三级记忆</b><span>每级都可程序化复现 · memory_epoch 控制授权失效</span></div>
+      <div class="loop" style="grid-template-columns: repeat(3, 1fr);">
+        <div><b>近 6 轮完整问答</b><span>最近对话原文直接进入上下文</span></div>
+        <div><b>程序式摘录摘要</b><span>每 4 轮增量触发，CAS 写入 <code>summary_revision</code>，不经模型</span></div>
+        <div><b>结构化 NPC 状态</b><span>情绪 / 压力 / 信任 / 谎言层级，从数据库直读</span></div>
+      </div>
+      <div class="callout purple" style="margin: 16px 24px 20px;">
+        <b>为什么不用 RAG</b>
+        <p>MVP 记忆来源是结构化数据，按 NPC 权限直接筛选数据库记录即可，无向量检索或 embedding 调用——可解释、可测试、零额外成本。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="rules">
+    <div class="section-head">
+      <h2><i class="ri-command-line"></i><span class="num">05</span>状态机与谎言系统</h2>
+      <p class="sub">确定性内核 · 详见 05 / 06 / 08</p>
+    </div>
+    <div class="panel">
+      <div class="panel-top"><b><i class="ri-git-commit-line"></i> 会话状态机（9 阶段）</b><span>6 个持久化阶段 + 3 个事务内瞬态</span></div>
+      <div class="panel-pad">
+        <div class="states">
+          <span class="state-chip">INIT</span><span class="state-sep">→</span>
+          <span class="state-chip">INTRO</span><span class="state-sep">→</span>
+          <span class="state-chip">INVESTIGATION</span><span class="state-sep">→</span>
+          <span class="state-chip">INTERROGATION</span><span class="state-sep">→</span>
+          <span class="state-chip">DEEP_INVESTIGATION</span><span class="state-sep">→</span>
+          <span class="state-chip">ACCUSATION</span><span class="state-sep">→</span>
+          <span class="state-chip">JUDGEMENT</span><span class="state-sep">→</span>
+          <span class="state-chip">REVIEW</span><span class="state-sep">→</span>
+          <span class="state-chip">FINISHED</span>
+        </div>
+        <p>绿色为持久化阶段；紫色虚线（INIT / INTRO / JUDGEMENT）为事务内瞬态，不落库。每个阶段有动作允许表与转换守卫，非法动作直接被 API 拒绝。</p>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>分层谎言状态（不可逆）</h3>
+        <div class="states">
+          <span class="state-chip">UNBROKEN</span><span class="state-sep">→</span>
+          <span class="state-chip">BROKEN</span><span class="state-sep">→</span>
+          <span class="state-chip">ADMITTED</span>
+        </div>
+        <p>每个谎言层级只能单向推进。玩家出示对应证据 → 状态机击破 → 程序更新承认判定与披露内容，模型只是「把这一步说出口」。</p>
+      </div>
+      <div class="card">
+        <h3>5 类表达策略（ResponsePlan）</h3>
+        <div class="policy">
+          <div><code>DENY</code><span>坚决否认</span></div>
+          <div><code>EVADE</code><span>回避问题</span></div>
+          <div><code>REDIRECT</code><span>转移话题</span></div>
+          <div><code>PARTIAL_ADMIT</code><span>部分承认</span></div>
+          <div><code>FULL_ADMIT</code><span>完全承认</span></div>
+        </div>
+        <p>由程序根据谎言层级、压力 / 信任数值选定策略并限定说法边界，LLM 在边界内润色表达。</p>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-chat-3-line"></i> 对话生成状态（前端轮询）</b><span>GET /conversations/{id} 五态</span></div>
+      <div class="poll panel-pad" style="padding-top: 4px;">
+        <span class="state-chip">PREPARING</span><span class="state-sep">→</span>
+        <span class="state-chip">GENERATING</span><span class="state-sep">→</span>
+        <span class="state-chip">COMPLETED</span><span class="state-sep">或</span>
+        <span class="state-chip">FALLBACK</span><span class="state-sep">·</span>
+        <span class="state-chip">STALE</span>
+      </div>
+      <p class="source-note" style="padding: 0 24px 20px;">降级路径固定：模型失败不影响规则效果，已提交的游戏事实保持一致。</p>
+    </div>
+  </section>
+
+  <section id="excluded">
+    <div class="section-head">
+      <h2><i class="ri-error-warning-line"></i><span class="num">06</span>明确不用什么</h2>
+      <p class="sub">负面清单也是选型决策 · 详见 01 §6 / 03 §1 / 10 §1</p>
+    </div>
+    <div class="panel">
+      <div class="panel-top"><b><i class="ri-error-warning-line"></i> 明确排除</b><span>文档明确写入「不引入 / 不进入 MVP」</span></div>
+      <div class="chips">
+        <div class="chip"><b><i class="ri-database-line"></i>Redis</b><p>无缓存层需求，单进程 + 单库即可满足性能预算。</p></div>
+        <div class="chip"><b><i class="ri-pie-chart-line"></i>向量数据库 / Embedding</b><p>记忆来自结构化数据，按权限直接筛选，无向量检索。</p></div>
+        <div class="chip"><b><i class="ri-stack-line"></i>消息队列</b><p>单异步进程内完成编排，不引入事件中间件。</p></div>
+        <div class="chip"><b><i class="ri-links-line"></i>WebSocket（MVP）</b><p>生成状态用 1.5 秒 HTTP 轮询获取。</p></div>
+        <div class="chip"><b><i class="ri-scales-3-line"></i>Judge / 评分 Agent</b><p>已取消：评分由规则引擎确定性完成，模型不当裁判。</p></div>
+        <div class="chip"><b><i class="ri-database-line"></i>SQLite（测试）</b><p>不支持行锁 / 隔离级别验收，测试必须用目标数据库。</p></div>
+        <div class="chip"><b><i class="ri-key-2-line"></i>JWT / OAuth / 账号体系</b><p>MVP 匿名访问，HttpOnly Cookie + 令牌摘要足够。</p></div>
+        <div class="chip"><b><i class="ri-shield-check-line"></i>微服务</b><p>模块化单体：一个后端应用 + 一个数据库。</p></div>
+        <div class="chip"><b><i class="ri-file-settings-line"></i>事件溯源 / 工作流平台</b><p>不引入插件注册表与通用工作流框架。</p></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-top"><b><i class="ri-information-line"></i> 未引入 · 按需再评估</b><span>文档未提及或明确「现有需求不需要」</span></div>
+      <div class="chips">
+        <div class="chip soft"><b><i class="ri-links-line"></i>LangChain / LangGraph</b><p>Agent 编排自研（AgentManager + LLMClient），未引入通用框架。</p></div>
+        <div class="chip soft"><b><i class="ri-links-line"></i>axios</b><p>原生 fetch 已满足，不加请求缓存框架。</p></div>
+        <div class="chip soft"><b><i class="ri-palette-line"></i>Tailwind / 动效库</b><p>原生 CSS + Element Plus 主题变量，动效用 CSS 过渡。</p></div>
+        <div class="chip soft"><b><i class="ri-terminal-box-line"></i>Docker / 反向代理</b><p>文档未提及部署容器化，部署形态为单进程 + 静态前端。</p></div>
+        <div class="chip soft"><b><i class="ri-flask-line"></i>Vitest / mypy</b><p>前端单测框架未提及；类型检查以 Ruff 生态为主。</p></div>
+        <div class="chip soft"><b><i class="ri-timer-line"></i>SSE / 流式回复</b><p>仅为后续增强提案，待轮询体验实测后再定。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pending">
+    <div class="section-head">
+      <h2><i class="ri-information-line"></i><span class="num">07</span>待定项</h2>
+      <p class="sub">诚实清单 · 详见 02 §12 / 03 §14</p>
+    </div>
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>待定项</th><th>现状</th><th>决定时机</th></tr></thead>
+          <tbody>
+            <tr><td>PostgreSQL 还是 MySQL</td><td>PG 18 为建议基线，MySQL 8.4 备选，二选一、不建双库兼容层。</td><td>实施前</td></tr>
+            <tr><td>模型供应商与具体模型</td><td>仅约定「OpenAI 兼容接口」+ 主备双路由。</td><td>实施前</td></tr>
+            <tr><td>前端构建工具</td><td>文档未指定（Vite / Webpack 均未出现）。</td><td>前端启动时</td></tr>
+            <tr><td>性能指标</td><td>P95 ≤ 1s（5 并发）为建议验收目标。</td><td>确定演示环境后</td></tr>
+            <tr><td>Token 与超时预算</td><td>4000 / 400 / 1100 / 300 与 30s 均为设计初值。</td><td>实测后调整</td></tr>
+            <tr><td>SSE / 流式回复</td><td>为明确标注的「提案」，当前 API 不提供。</td><td>轮询体验实测后</td></tr>
+            <tr><td>案件内容包 / 评分细则</td><td>数量边界已定，权重、阈值与「凶手错误是否直接判错」待配置。</td><td>案件配置确定时</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="section-head">
+      <h2><i class="ri-rocket-line"></i><span class="num">08</span>开发路线</h2>
+      <p class="sub">六阶段实现 · 详见 01 §9 / 15 §8</p>
+    </div>
+    <div class="panel">
+      <div class="roadmap">
+        <div class="milestone"><h3>领域与案件</h3><p>domain 层 + 规则测试，无模型走通取证 / 谎言 / 评分。</p></div>
+        <div class="milestone"><h3>持久化闭环</h3><p>ORM、Alembic、Repositories，实库验证行锁与幂等。</p></div>
+        <div class="milestone"><h3>HTTP 与固定回复</h3><p>API 闭环，固定回复模式下无模型可完整通关。</p></div>
+        <div class="milestone"><h3>单 NPC 受限表达</h3><p>Memory / Agent / Gateway / 生成编排接入一个 NPC。</p></div>
+        <div class="milestone"><h3>完整 MVP</h3><p>4 NPC、全部内容、三级记忆、前端与 E2E。</p></div>
+        <div class="milestone"><h3>评测与演示</h3><p>主备模型题集、延迟与成本实测、答辩演示。</p></div>
+      </div>
+    </div>
+    <div class="prios">
+      <div class="card"><h3>P0 · 案件可解</h3><p>系统可运行，存在无招供的正确通关路径。</p></div>
+      <div class="card"><h3>P1 · 交互可信</h3><p>AI 对话达到 MVP 标准，谎言与披露按设计执行。</p></div>
+      <div class="card"><h3>P2 · 体验增强</h3><p>流式回复、玩家笔记、提示系统。</p></div>
+      <div class="card"><h3>P3 · 创新扩展</h3><p>一致性评测 / 事件回放 / 受约束信息传播，三选一。</p></div>
+    </div>
+  </section>
+
+  <section id="docs">
+    <div class="section-head">
+      <h2><i class="ri-book-2-line"></i><span class="num">09</span>设计文档索引</h2>
+      <p class="sub">本页全部结论的出处 · docs/</p>
+    </div>
+    <div class="panel">
+      <div class="docs-grid">
+        <a class="doc-link" href="docs/01-project-scope.md"><em>01</em><b>项目范围</b><span>定位、MVP 边界、优先级与内容预算</span></a>
+        <a class="doc-link" href="docs/02-requirements-analysis.md"><em>02</em><b>需求分析</b><span>用户故事、NFR、风险与待确认项</span></a>
+        <a class="doc-link" href="docs/03-architecture-design.md"><em>03</em><b>架构设计</b><span>模块化单体、分层与事务边界</span></a>
+        <a class="doc-link" href="docs/04-domain-model.md"><em>04</em><b>领域模型</b><span>三聚合根与领域事件</span></a>
+        <a class="doc-link" href="docs/05-state-machine.md"><em>05</em><b>状态机</b><span>9 阶段、动作允许表与守卫</span></a>
+        <a class="doc-link" href="docs/06-evidence-engine.md"><em>06</em><b>证据引擎</b><span>证据校验、披露与安全投影</span></a>
+        <a class="doc-link" href="docs/07-agent-design.md"><em>07</em><b>Agent 设计</b><span>受限角色路由与上下文预算</span></a>
+        <a class="doc-link" href="docs/08-lie-system.md"><em>08</em><b>谎言系统</b><span>分层谎言与表达策略</span></a>
+        <a class="doc-link" href="docs/09-database-design.md"><em>09</em><b>数据库设计</b><span>21 张表、索引与隔离级别</span></a>
+        <a class="doc-link" href="docs/10-api-design.md"><em>10</em><b>API 设计</b><span>REST 契约、幂等与错误码</span></a>
+        <a class="doc-link" href="docs/11-frontend-design.md"><em>11</em><b>前端设计</b><span>布局、Store 与可视化方案</span></a>
+        <a class="doc-link" href="docs/12-memory-design.md"><em>12</em><b>记忆设计</b><span>三级记忆与 memory_epoch</span></a>
+        <a class="doc-link" href="docs/13-security.md"><em>13</em><b>安全</b><span>匿名身份、输出校验与 12 类风险</span></a>
+        <a class="doc-link" href="docs/14-testing.md"><em>14</em><b>测试</b><span>9 类 marker、用例编号与门槛</span></a>
+        <a class="doc-link" href="docs/15-development-plan.md"><em>15</em><b>开发计划</b><span>目录结构、六阶段与验收</span></a>
+        <a class="doc-link" href="docs/AI_rules.md"><em>AI</em><b>编码守则</b><span>AI 协作时的硬性约束</span></a>
+      </div>
+    </div>
+    <p class="source-note">另有 <a href="docs/mvp-architecture.html">docs/mvp-architecture.html</a>：MVP 架构图页面（与本页同一套设计语言）。</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-line">
+    <span>The Truing Murders · 技术栈 README —— 依据 docs/ 下 16 篇设计文档整理，以文档原文为准；「未提及」不等于「永久排除」，均以设计文档后续修订为准。</span>
+    <span>2026-09 · 设计基线</span>
+  </div>
+</footer>
+</body>
+</html>

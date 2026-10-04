@@ -1,0 +1,10 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Local editor and operating system files
+.zcodeignore
+.idea/
+.vscode/
+.DS_Store
