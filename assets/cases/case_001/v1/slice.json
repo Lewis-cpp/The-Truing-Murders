@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "scope": "week_one_slice",
+  "case_id": "case_001",
+  "version": "1-slice",
+  "rules_version": "w1-1",
+  "title": "停电之夜",
+  "introduction": "澄明研究所，案发当晚。21:25，负责人陆衡被发现死在档案室。走廊曾短暂停电，档案柜敞开。四名相关人员仍在所内。你受托核对现场记录，查明凶手、凶器、动机与作案经过。第一周仅开放档案室与副研究员沈砚；其余三人可以作为指控候选。",
+  "review_status": "pending_human_review",
+  "scene": {
+    "id": "S01",
+    "name": "档案室",
+    "description": "桌面散着纸页，一枚铜镇纸留在地毯上。门旁的备用终端仍亮着，封存卷宗等待核对。",
+    "actions": [
+      {
+        "id": "A01",
+        "label": "查看备用门禁终端",
+        "evidence_id": "E01",
+        "requires": { "all_of": [], "any_of": [] }
+      },
+      {
+        "id": "A02",
+        "label": "检查桌边与现场检验袋",
+        "evidence_id": "E02",
+        "requires": { "all_of": [], "any_of": [] }
+      },
+      {
+        "id": "A03",
+        "label": "核对封存卷宗",
+        "evidence_id": "E03",
+        "requires": { "all_of": ["E01", "E02"], "any_of": [] }
+      }
+    ]
+  },
+  "npc": {
+    "id": "NPC01",
+    "name": "沈砚",
+    "role": "副研究员",
+    "initial_pressure": 20,
+    "initial_trust": 40
+  },
+  "suspects": [
+    { "id": "NPC01", "label": "沈砚 · 副研究员" },
+    { "id": "NPC02", "label": "许岚 · 档案管理员" },
+    { "id": "NPC03", "label": "周启 · 值班工程师" },
+    { "id": "NPC04", "label": "林澄 · 研究助理" }
+  ],
+  "weapons": [
+    { "id": "W01", "label": "铜镇纸" },
+    { "id": "W02", "label": "裁纸刀" },
+    { "id": "W03", "label": "电缆" }
+  ],
+  "motives": [
+    { "id": "M01", "label": "阻止实验造假被移交审计" },
+    { "id": "M02", "label": "争夺遗产" },
+    { "id": "M03", "label": "报复值班处分" }
+  ],
+  "process_steps": [
+    { "id": "P_ENTER", "label": "停电期间进入档案室" },
+    { "id": "P_ATTACK", "label": "用铜镇纸袭击陆衡" },
+    { "id": "P_STAGE", "label": "取走原始记录并翻乱档案柜伪装失窃" },
+    { "id": "P_POISON", "label": "先在饮水中投毒" },
+    { "id": "P_LEAVE", "label": "离开研究所后遥控行凶" }
+  ],
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "备用门禁记录",
+      "content": "独立电池供电的终端保留了21:10沈砚进入、21:16离开档案室的刷卡与人脸核验记录。20:55至21:25，除室内的陆衡外没有其他人进出。现场人员已比对身份、终端校时记录和备用供电状态；记录证明到场，不单独证明杀人。",
+      "source": "档案室备用终端与现场核验单",
+      "credibility": "VERIFIED"
+    },
+    {
+      "id": "E02",
+      "title": "铜镇纸与现场检验单",
+      "content": "铜镇纸的打击面残留陆衡的血迹，形状与致命伤吻合；握持面的新鲜血印与沈砚指纹匹配。桌角还发现沾血的撕裂手套片。检验单明确这些是本次现场检验的结论，不能仅凭一枚日常指纹认定行凶。",
+      "source": "现场物证袋与签名检验单",
+      "credibility": "VERIFIED"
+    },
+    {
+      "id": "E03",
+      "title": "审计移交联与翻柜痕迹",
+      "content": "按门禁时段与物证编号核对后，卷宗显示：陆衡20:55签署移交单，次日上午将提交沈砚负责的B17实验原始记录，追查数据造假。柜中只缺B17原件，现金和其他卷宗未动；抽屉内侧及B17纸套上的同源血迹说明翻找发生在陆衡受伤之后。封存的移交联副本未被取走。",
+      "source": "封存卷宗、签名移交联副本和现场痕迹核对单",
+      "credibility": "VERIFIED"
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "K01",
+      "content": "沈砚负责B17实验组，平时有权限进入档案室。",
+      "known_by": ["NPC01", "NPC02", "NPC03", "NPC04"],
+      "disclosure": "PUBLIC"
+    },
+    {
+      "id": "K02",
+      "content": "沈砚承认21:10至21:16进入过档案室；此条只记录到场证词，不是杀人招供。",
+      "known_by": ["NPC01"],
+      "disclosure": "ADMITTED"
+    }
+  ],
+  "lie": {
+    "id": "L01",
+    "npc_id": "NPC01",
+    "counterevidence": { "all_of": ["E01"], "any_of": [] },
+    "admission_presented": { "all_of": ["E01", "E03"], "any_of": [] },
+    "admission_pressure_min": 65,
+    "admission_trust_min": null,
+    "statements": {
+      "unbroken": "停电时我一直在休息区，没有去过档案室。",
+      "broken": "这份记录和我的说法对不上。我现在不想解释那几分钟。",
+      "admitted": "我承认21:10到21:16在档案室。关于其他事情，我暂时不作解释。"
+    },
+    "admitted_knowledge_id": "K02",
+    "effects": [
+      { "evidence_id": "E01", "pressure": 25, "trust": -5 },
+      { "evidence_id": "E03", "pressure": 25, "trust": 0 }
+    ]
+  },
+  "truth": {
+    "culprit": "NPC01",
+    "weapon": "W01",
+    "motive": "M01",
+    "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+    "explanation": "沈砚为阻止B17实验造假被移交审计，利用工程检修造成的走廊停电，于21:10进入档案室。21:12，他用桌上的铜镇纸袭击陆衡；随后取走B17原始记录、翻乱档案柜伪装失窃，21:16离开。门禁核对限制了到场人选，镇纸上的新鲜血印联系了行凶者与凶器，移交联和伤后翻柜痕迹说明动机与善后顺序。停电是周启的违规检修，并非沈砚制造；许岚隐瞒了私借档案，林澄保存了未经许可的实验副本，两人均未行凶。第一周只验证档案室内的核心过程；其余人物秘密与检修核验留在全案草稿。"
+  },
+  "scoring": {
+    "correct_min": 85,
+    "partial_min": 30,
+    "wrong_culprit_is_wrong": true,
+    "process_order": "exact",
+    "criteria": [
+      {
+        "id": "C_CULPRIT",
+        "label": "凶手",
+        "kind": "culprit",
+        "points": 30,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "行凶者为沈砚；选错凶手时总类别直接判错。"
+      },
+      {
+        "id": "C_WEAPON",
+        "label": "凶器",
+        "kind": "weapon",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "致命伤对应铜镇纸。"
+      },
+      {
+        "id": "C_MOTIVE",
+        "label": "动机",
+        "kind": "motive",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "沈砚试图阻止实验造假进入审计。"
+      },
+      {
+        "id": "C_PROCESS",
+        "label": "过程顺序",
+        "kind": "process",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "必须恰好按进入、袭击、伪装失窃的顺序选择步骤。"
+      },
+      {
+        "id": "C_ENTRY",
+        "label": "到场依据",
+        "kind": "support",
+        "points": 10,
+        "step_id": "P_ENTER",
+        "evidence_ids": ["E01"],
+        "explanation": "进入步骤必须关联本次引用的E01备用门禁记录。"
+      },
+      {
+        "id": "C_ATTACK",
+        "label": "袭击依据",
+        "kind": "support",
+        "points": 10,
+        "step_id": "P_ATTACK",
+        "evidence_ids": ["E02"],
+        "explanation": "袭击步骤必须关联本次引用的E02镇纸与现场检验单。"
+      },
+      {
+        "id": "C_STAGE",
+        "label": "善后依据",
+        "kind": "support",
+        "points": 5,
+        "step_id": "P_STAGE",
+        "evidence_ids": ["E03"],
+        "explanation": "伪装步骤必须关联本次引用的E03移交联及伤后翻柜痕迹。"
+      }
+    ]
+  }
+}

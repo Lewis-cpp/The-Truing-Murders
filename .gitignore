@@ -8,3 +8,28 @@
 .idea/
 .vscode/
 .DS_Store
+
+# Python environments, caches and build output
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+build/
+dist/
+
+# Frontend dependencies and reports
+node_modules/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Local output and database backups
+*.log
+backups/
+*.dump

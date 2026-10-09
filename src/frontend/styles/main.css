@@ -1,0 +1,40 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #e7e5df;
+  background: #172023;
+  font-synthesis: none;
+  line-height: 1.6;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 32px;
+}
+
+.eyebrow {
+  color: #bdab83;
+  letter-spacing: 0.15em;
+  font-size: 0.8rem;
+}
+
+h1 {
+  font-size: 2.25rem;
+  line-height: 1.2;
+}
+
+[role='status'] {
+  padding: 16px 0;
+}
+
+.ready {
+  color: #99d7b2;
+}
+
+.error {
+  color: #ffb5ab;
+}

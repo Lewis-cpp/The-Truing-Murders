@@ -1,0 +1,119 @@
+[
+  {
+    "name": "correct_without_confession",
+    "actions": ["A01", "A02", "A03"],
+    "accusation": {
+      "culprit": "NPC01",
+      "weapon": "W01",
+      "motive": "M01",
+      "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+      "cited_evidence_ids": ["E01", "E02", "E03"],
+      "evidence_links": [
+        { "step_id": "P_ENTER", "evidence_id": "E01" },
+        { "step_id": "P_ATTACK", "evidence_id": "E02" },
+        { "step_id": "P_STAGE", "evidence_id": "E03" }
+      ]
+    },
+    "score": 100,
+    "category": "正确",
+    "points": [30, 15, 15, 15, 10, 10, 5]
+  },
+  {
+    "name": "all_answers_but_no_evidence",
+    "actions": [],
+    "accusation": {
+      "culprit": "NPC01",
+      "weapon": "W01",
+      "motive": "M01",
+      "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+      "cited_evidence_ids": [],
+      "evidence_links": []
+    },
+    "score": 75,
+    "category": "部分正确",
+    "points": [30, 15, 15, 15, 0, 0, 0]
+  },
+  {
+    "name": "wrong_culprit_overrides_points",
+    "actions": ["A01", "A02", "A03"],
+    "accusation": {
+      "culprit": "NPC02",
+      "weapon": "W01",
+      "motive": "M01",
+      "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+      "cited_evidence_ids": ["E01", "E02", "E03"],
+      "evidence_links": [
+        { "step_id": "P_ENTER", "evidence_id": "E01" },
+        { "step_id": "P_ATTACK", "evidence_id": "E02" },
+        { "step_id": "P_STAGE", "evidence_id": "E03" }
+      ]
+    },
+    "score": 70,
+    "category": "错误",
+    "points": [0, 15, 15, 15, 10, 10, 5]
+  },
+  {
+    "name": "partial_at_30",
+    "actions": [],
+    "accusation": {
+      "culprit": "NPC01",
+      "weapon": "W02",
+      "motive": "M02",
+      "steps": ["P_POISON"],
+      "cited_evidence_ids": [],
+      "evidence_links": []
+    },
+    "score": 30,
+    "category": "部分正确",
+    "points": [30, 0, 0, 0, 0, 0, 0]
+  },
+  {
+    "name": "all_wrong",
+    "actions": [],
+    "accusation": {
+      "culprit": "NPC02",
+      "weapon": "W02",
+      "motive": "M02",
+      "steps": ["P_POISON"],
+      "cited_evidence_ids": [],
+      "evidence_links": []
+    },
+    "score": 0,
+    "category": "错误",
+    "points": [0, 0, 0, 0, 0, 0, 0]
+  },
+  {
+    "name": "correct_threshold_85",
+    "actions": ["A02", "A01", "A03"],
+    "accusation": {
+      "culprit": "NPC01",
+      "weapon": "W01",
+      "motive": "M01",
+      "steps": ["P_STAGE", "P_ATTACK", "P_ENTER"],
+      "cited_evidence_ids": ["E01", "E02", "E03"],
+      "evidence_links": [
+        { "step_id": "P_ENTER", "evidence_id": "E01" },
+        { "step_id": "P_ATTACK", "evidence_id": "E02" },
+        { "step_id": "P_STAGE", "evidence_id": "E03" }
+      ]
+    },
+    "score": 85,
+    "category": "正确",
+    "points": [30, 15, 15, 0, 10, 10, 5]
+  },
+  {
+    "name": "partial_below_threshold_80",
+    "actions": ["A01", "A02", "A03"],
+    "accusation": {
+      "culprit": "NPC01",
+      "weapon": "W01",
+      "motive": "M01",
+      "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+      "cited_evidence_ids": ["E03"],
+      "evidence_links": [{ "step_id": "P_STAGE", "evidence_id": "E03" }]
+    },
+    "score": 80,
+    "category": "部分正确",
+    "points": [30, 15, 15, 15, 0, 0, 5]
+  }
+]
