@@ -12,10 +12,5 @@
     "esModuleInterop": true,
     "types": ["vite/client", "node"]
   },
-  "include": [
-    "src/frontend/**/*.ts",
-    "src/frontend/**/*.vue",
-    "tests/frontend/**/*.ts",
-    "vite.config.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.vue", "tests/**/*.ts", "vite.config.ts"]
 }

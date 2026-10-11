@@ -13,7 +13,7 @@ from backend.domain.state_machine import emotion
 
 pytestmark = [pytest.mark.unit, pytest.mark.rule]
 EXPECTED = json.loads(
-    (Path(__file__).resolve().parents[2] / "data/expected/week_one_verdicts.json").read_text()
+    (Path(__file__).resolve().parents[1] / "data/expected/week_one_verdicts.json").read_text()
 )
 
 

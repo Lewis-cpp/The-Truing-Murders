@@ -76,7 +76,7 @@ P0 表示规则、隔离、存档、结案或故障闭环，全部作为发布�
 | F-LAYERS | 第 08 篇实验室例：NPC_LAB、parking_record、destroyed_contract、L_LAB_VISIT、L_LAB_PURPOSE；两次首次出示各 +25/-5 | 首层出示后可承认；第二层要求前层已承认；保留原文正序与逆序预期 |
 | F-ISOLATION | 4 个 NPC 各自的私密、公开、未解锁、已解锁条目；两个访问者、多个会话；另一个模板复用相同局部 ID | 私密正文使用不同的测试专属标记；非法跨版本数据只用于拒绝测试 |
 | F-SCORING | 第 3.2 节独立的人工评分测试案例、候选干扰项、合法与非法指控 | 仅验证评分机制，不宣称是真实案件答案 |
-| F-MVP | 后续正式 `assets/cases/` 中审核并固定版本的完整案件，以及作者给出的取证路径和三类判定样例 | 校验内容摘要与版本；没有完整案件时不得把端到端验收标为通过 |
+| F-MVP | 后续正式 `backend/assets/cases/` 中审核并固定版本的完整案件，以及作者给出的取证路径和三类判定样例 | 校验内容摘要与版本；没有完整案件时不得把端到端验收标为通过 |
 | F-OUTPUT | 合法回复、提前招供、泄密、伪造证据、翻供、错误 JSON、工具调用、超长/截断输出和传输错误 | 固定输出与实际供应商外壳分层保存；不得用假成功替代输出验证 |
 | F-MEMORY | 稀疏 conversation_seq、6/10/14/60/100 轮历史、不同 epoch、缺失或恶意摘要 | 保留来源与授权变化，不能只有没有语义的长字符串 |
 | F-RECOVERY | 调查中、部分承认、完整承认、指控草稿、REVIEW、FINISHED，以及各生成中间状态 | 用真实应用提交生成正常存档；损坏变体仅用于完整性拒绝检查 |
@@ -452,11 +452,11 @@ I=`INVESTIGATION`，D=`DEEP_INVESTIGATION`，T=`INTERROGATION`，A=`ACCUSATION`�
 
 ## 13. 推荐 pytest 目录结构
 
-按现有 `src/backend/` 分层镜像；跨层流程单列 integration，浏览器用例单列 e2e。七类由 marker 表示，不再复制成七棵相互重复的目录。下面是推荐落地清单，随对应实现新增文件，不预先创建空脚手架。
+测试放在后端子项目的 `backend/tests/`，按 `backend/src/backend/` 分层镜像；跨层流程单列 integration，浏览器用例单列 e2e。七类由 marker 表示，不再复制成七棵相互重复的目录。下面是推荐落地清单，随对应实现新增文件，不预先创建空脚手架。
 
 ```text
-tests/
-  conftest.py                         # 固定案例、可控时钟/模型；默认禁止真实模型
+backend/tests/
+  conftest.py                         # 固定案例、时钟/模型、实库与应用 fixture；默认禁止真实模型
   data/
     cases/
       video_case.json                 # 补齐后的 F-VIDEO
@@ -468,36 +468,34 @@ tests/
     agent/
       adversarial_outputs.json        # 固定恶意/异常候选
       evaluation_cases.jsonl          # 正常/攻击题、授权状态和人工标签
-  backend/
-    conftest.py                       # API/集成共用实库、迁移与应用 fixture
-    domain/
-      test_case_validation.py         # U-01/03，R-22/31
-      test_evidence.py                # 依赖、持有、可信度和安全投影
-      test_rules.py                   # 规则流水线、效果键、顺序与冲突
-      test_lie_system.py              # 无证据、阈值、分层披露、反序出示
-      test_state_machine.py           # 六阶段全操作组合及转移序列
-      test_judgement.py               # J-GOLD、三类结果、证据与过程评分
-    application/
-      test_npc_context.py             # 四角色知识与最终 messages 隔离
-      test_memory.py                  # 历史窗口、摘要、epoch 和累计承认
-      test_conversation.py            # 表达校验、固定降级、调用边界
-    infrastructure/
-      test_llm_client.py              # 真实解析器配假传输，无外部调用
-      test_database.py                # 真实数据库约束、权限及迁移
-    integration/
-      conftest.py                     # 事务故障注入与并发屏障
-      test_game_flow.py               # 规则到持久化到表达
-      test_concurrency.py             # 多连接、幂等、版本、占位和预算
-      test_save_load.py               # 重启、版本、稳定快照、备份恢复
-      test_failure_recovery.py        # 事务/生成/重开/摘要中断点
-      test_non_ai_latency.py          # 固定环境下的 5 会话性能样本
-    api/
-      conftest.py                     # 真实应用/数据库客户端、两访问者
-      test_sessions.py               # 访客、案件、创建、继续、重开、原请求
-      test_investigation.py           # 场景、证据、人物、图与时间线
-      test_conversations.py           # 审讯、聊天、出示、分页和表达重试
-      test_accusations.py             # 草稿、正式判定、复盘和完成
-      test_contracts.py               # 公共负例、OpenAPI、所有 GET 副作用
+  domain/
+    test_case_validation.py           # U-01/03，R-22/31
+    test_evidence.py                  # 依赖、持有、可信度和安全投影
+    test_rules.py                     # 规则流水线、效果键、顺序与冲突
+    test_lie_system.py                # 无证据、阈值、分层披露、反序出示
+    test_state_machine.py             # 六阶段全操作组合及转移序列
+    test_judgement.py                 # J-GOLD、三类结果、证据与过程评分
+  application/
+    test_npc_context.py               # 四角色知识与最终 messages 隔离
+    test_memory.py                    # 历史窗口、摘要、epoch 和累计承认
+    test_conversation.py              # 表达校验、固定降级、调用边界
+  infrastructure/
+    test_llm_client.py                # 真实解析器配假传输，无外部调用
+    test_database.py                  # 真实数据库约束、权限及迁移
+  integration/
+    conftest.py                       # 事务故障注入与并发屏障
+    test_game_flow.py                 # 规则到持久化到表达
+    test_concurrency.py               # 多连接、幂等、版本、占位和预算
+    test_save_load.py                 # 重启、版本、稳定快照、备份恢复
+    test_failure_recovery.py          # 事务/生成/重开/摘要中断点
+    test_non_ai_latency.py            # 固定环境下的 5 会话性能样本
+  api/
+    conftest.py                       # 真实应用/数据库客户端、两访问者
+    test_sessions.py                 # 访客、案件、创建、继续、重开、原请求
+    test_investigation.py             # 场景、证据、人物、图与时间线
+    test_conversations.py             # 审讯、聊天、出示、分页和表达重试
+    test_accusations.py               # 草稿、正式判定、复盘和完成
+    test_contracts.py                 # 公共负例、OpenAPI、所有 GET 副作用
   e2e/
     conftest.py                       # 浏览器、启动地址、隔离数据库
     test_case_completion.py          # 固定模式正确/部分/错误/无招供
@@ -522,7 +520,7 @@ tests/
 | persisted_game | 通过合法动作准备所需检查点 | 只为状态守卫专项测试构造特殊快照，并明确标注 |
 | business_projection | 从公开行为和持久化记录提取 B0～B5 字段 | 不复用被测授权/评分函数生成 expected；保留顺序与首次来源 |
 
-数据库 fixture 放在 backend 层的公共 conftest 或实际需要的最近共同目录中，API 与 integration 共用，不从测试模块相互导入。需要多个进程并行时再按 worker 分库/分 schema；起步顺序执行，先保证确定性。
+数据库 fixture 放在 `backend/tests/` 的公共 conftest 或实际需要的最近共同目录中，API 与 integration 共用，不从测试模块相互导入。需要多个进程并行时再按 worker 分库/分 schema；起步顺序执行，先保证确定性。
 
 以矩阵 ID 命名参数，如 `pytest.param(..., id="R-05-pressure-100-no-evidence")`，便于报告追踪。正常拒绝、合法无收益、生成降级和系统故障使用不同预期；不要用一个“返回不是 500”断言混在一起。
 
@@ -530,7 +528,7 @@ tests/
 
 起步只使用 pytest、项目已有的校验能力/SQLAlchemy，以及 FastAPI 测试所需 HTTP 客户端；进入浏览器阶段再加入 pytest-playwright。异步测试按实际实现选择一种 runner，不同时搭建两套。无需独立 Agent 测试平台、向量库、测试服务总线或大量 fixture 工厂。
 
-实现测试工具链时，在根 `pyproject.toml` 登记标记，并把实际安装和命令写入 README。推荐配置如下，当前只作为文档示例：
+实现测试工具链时，在 `backend/pyproject.toml` 登记标记，并把实际安装和命令写入 README。推荐配置如下，当前只作为文档示例：
 
 ```toml
 [tool.pytest.ini_options]
@@ -558,13 +556,14 @@ markers = [
 以下命令在测试文件、依赖、应用和数据库 fixture 实现后使用；本仓库当前不能据此运行游戏验收。`-m` 显式选择覆盖默认排除表达式，真实模型仍受额外启用开关控制。
 
 ```bash
-python -m pytest tests/backend/domain -q
-python -m pytest tests/backend/application tests/backend/infrastructure/test_llm_client.py -q
-python -m pytest tests/backend -m "integration and not api and not performance" -q
-python -m pytest tests/backend/api -q
-python -m pytest tests/e2e -q
-python -m pytest tests/backend/integration -m performance -q
-RUN_LIVE_LLM_TESTS=1 python -m pytest tests/agent_eval -m live_llm -q
+cd backend
+uv run pytest tests/domain -q
+uv run pytest tests/application tests/infrastructure/test_llm_client.py -q
+uv run pytest tests -m "integration and not api and not performance" -q
+uv run pytest tests/api -q
+uv run pytest tests/e2e -q
+uv run pytest tests/integration -m performance -q
+RUN_LIVE_LLM_TESTS=1 uv run pytest tests/agent_eval -m live_llm -q
 ```
 
 CI 任务按目录或排除标记分配，避免同一用例因分类交叉重复运行；上面的集成命令已排除 api/performance，二者分别执行。所有实际定义的格式化、lint 和测试命令须按仓库约定执行，不新增只重命名现有命令的包装脚本。

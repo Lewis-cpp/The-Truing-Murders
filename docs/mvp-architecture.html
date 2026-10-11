@@ -342,7 +342,7 @@
         <div class="data-note"><strong>唯一存储原则：</strong><code>state_json</code> 只保留场景进度、非证据已知信息与指控草稿等小结构。证据、NPC、效果键不在其中重复维护；Save/Load 从关系表和剩余 JSON 组装一致的 <code>GameSnapshot</code>。</div>
       </div>
       <div class="grid2">
-        <article class="card"><h3>服务端案件导入</h3><p><code>assets/cases/</code> → 引用与可解路径校验 → 独立维护账号发布静态定义。运行时静态表只读；案件包不随前端静态资源发布。</p></article>
+        <article class="card"><h3>服务端案件导入</h3><p><code>backend/assets/cases/</code> → 引用与可解路径校验 → 独立维护账号发布静态定义。运行时静态表只读；案件包不随前端静态资源发布。</p></article>
         <article class="card"><h3>记忆预算与恢复</h3><p>近期最多 6 个完整轮次，旧对话采用程序摘录摘要，关键承认每轮从权威状态重建。刷新与恢复不重发模型请求，摘要丢失不影响案件事实。</p></article>
       </div>
       <p class="source">依据：<a href="04-domain-model.md">04 领域模型</a><a href="09-database-design.md">09 数据库</a><a href="12-memory-design.md">12 记忆扩展</a></p>

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import App from '../../src/frontend/App.vue'
+import App from '../src/App.vue'
 
 afterEach(() => vi.unstubAllGlobals())
 

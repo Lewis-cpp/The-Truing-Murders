@@ -14,7 +14,7 @@ export default defineConfig(
     languageOptions: { parserOptions: { parser: ts.parser } },
   },
   {
-    files: ['src/frontend/**/*.{ts,vue}', 'tests/frontend/**/*.ts'],
+    files: ['src/**/*.{ts,vue}', 'tests/**/*.ts'],
     languageOptions: { globals: globals.browser },
   },
 )

@@ -113,19 +113,19 @@ LLM 密钥仅保存在后端环境配置或部署密钥中。只允许后端配�
 建议的代码组织如下；这是后续落地位置，不要求现在创建空文件：
 
 ```text
-src/
-  frontend/                    # Vue 应用、API 客户端和页面
-  backend/
+backend/                       # 独立 Python 项目：pyproject.toml、uv.lock、Compose
+  src/backend/
     main.py                    # FastAPI 启动及依赖装配
     api/                       # 路由、认证依赖、输入输出模型
     application/               # Game、Conversation、Memory 等用例协作
     domain/                    # 状态机、证据规则、谎言与评分
     infrastructure/            # SQLAlchemy 持久化与 LLM Gateway
-tests/
-  backend/                     # 对应领域、应用与持久化检查
-  frontend/                    # 关键交互检查
-assets/
-  cases/                       # 仅供后端导入的案件定义，不作为前端静态资源发布
+  tests/                       # 对应领域、应用与持久化检查
+  assets/
+    cases/                     # 仅供后端导入的案件定义，不作为前端静态资源发布
+frontend/                      # 独立 Node 项目：package.json、Vite 配置
+  src/                         # Vue 应用、API 客户端和页面
+  tests/                       # 关键交互检查
 docs/
 ```
 

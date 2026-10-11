@@ -11,9 +11,9 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "lint": "eslint src/frontend tests/frontend vite.config.ts",
-    "format": "prettier --write src/frontend tests/frontend *.json *.ts *.js compose.yaml",
-    "format:check": "prettier --check src/frontend tests/frontend *.json *.ts *.js compose.yaml",
+    "lint": "eslint src tests vite.config.ts",
+    "format": "prettier --write src tests *.json *.ts *.js",
+    "format:check": "prettier --check src tests *.json *.ts *.js",
     "test": "vitest run"
   },
   "dependencies": {

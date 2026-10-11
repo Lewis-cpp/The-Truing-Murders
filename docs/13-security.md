@@ -194,7 +194,7 @@ API 的 2,000 字符聊天上限与 token 预算不同，500 tokens 只是问题
 
 ### 5.1 边界与接口
 
-沿用第 07 篇：`LLMClient` 就是 Gateway，落在 `src/backend/infrastructure/llm_client.py`，不再包装第二层 Client，不拆独立服务。一个进程复用客户端连接，每次调用使用独立 messages，无供应商持久会话或跨 NPC 回答缓存。
+沿用第 07 篇：`LLMClient` 就是 Gateway，落在 `backend/src/backend/infrastructure/llm_client.py`，不再包装第二层 Client，不拆独立服务。一个进程复用客户端连接，每次调用使用独立 messages，无供应商持久会话或跨 NPC 回答缓存。
 
 | 责任 | 执行者 |
 | --- | --- |
@@ -410,7 +410,7 @@ token 占用 = KNOWN 的 billable_tokens 之和
 - 沿用同源 `HttpOnly; Secure; SameSite=Lax` 匿名 Cookie，数据库只存令牌摘要；所有写请求验证 Origin。session_id、npc_id 和 evidence_id 不是凭据，子资源逐级校验归属；未持有、跨局和不存在的秘密引用使用统一错误。
 - 请求体最多 64 KiB，聊天、附言、指控说明分别保持第 10 篇长度限制；拒绝未知字段和非法 ID。ORM 参数化查询，固定规则不执行 Python、SQL 或模板表达式。
 - 前端按普通文本显示玩家与模型内容，不使用 `v-html`，不自动加载模型给出的图片/外链。受保护响应 `Cache-Control: no-store`，CORS 不开放带凭据的任意来源。
-- `assets/cases/`、数据库备份、环境文件和 Prompt 调试记录不作为前端静态资源发布；检查构建产物中没有完整案件、正确答案标记或密钥。公开源码不应依赖隐藏算法作为授权机制。
+- `backend/assets/cases/`、数据库备份、环境文件和 Prompt 调试记录不作为前端静态资源发布；检查构建产物中没有完整案件、正确答案标记或密钥。公开源码不应依赖隐藏算法作为授权机制。
 - 运行账号只读静态案件表，发布使用独立维护权限；依赖锁定后执行相应漏洞检查。模型失败不允许启用 debug、打印原始请求或向玩家返回堆栈来排错。
 
 ### 8.2 监控与处置

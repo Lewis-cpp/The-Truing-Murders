@@ -584,7 +584,7 @@ Origin: https://game.example
 
 ## 10. FastAPI 落地与验收要求
 
-按已有 `src/backend/api/`、`application/`、`domain/`、`infrastructure/` 分层落地即可，不现在生成控制器脚手架。
+按已有 `backend/src/backend/api/`、`application/`、`domain/`、`infrastructure/` 分层落地即可，不现在生成控制器脚手架。
 
 - 路由只解析参数、调用认证依赖和业务用例、映射响应；Game Engine 管理事务、归属、幂等与状态校验。不会出现 `/agents/{id}/run`、`/rules/evaluate` 或通用 `/sessions/{id}/state` 写接口。
 - 请求与响应使用不同模型；响应显式声明 `response_model`，在安全投影之后再次限制返回字段，不能依赖前端隐藏秘密。[FastAPI 响应模型文档](https://fastapi.tiangolo.com/tutorial/response-model/)
