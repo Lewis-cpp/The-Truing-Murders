@@ -214,4 +214,8 @@ class GameState:
 
 
 class GameError(ValueError):
-    """A safe message for a rejected player action."""
+    """A safe message for a rejected player action, with a stable machine-readable code."""
+
+    def __init__(self, message: str, code: str = "ACTION_NOT_ALLOWED"):
+        super().__init__(message)
+        self.code = code

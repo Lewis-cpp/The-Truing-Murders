@@ -1,3 +1,5 @@
+import hashlib
+import json
 from itertools import permutations
 from pathlib import Path
 
@@ -130,10 +132,48 @@ def validate_case(case: Case) -> None:
         raise ValueError("反证、可信度或数值门槛使承认不可达。")
 
 
-def load_case(path: Path | None = None) -> Case:
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
+    keys = [key for key, _ in pairs]
+    duplicates = sorted({key for key in keys if keys.count(key) > 1})
+    if duplicates:
+        raise ValueError(f"案件文件含有重复的 JSON 键：{', '.join(duplicates)}")
+    return dict(pairs)
+
+
+def parse_case(text: str) -> Case:
     try:
-        case = Case.model_validate_json((path or default_case_path()).read_text(encoding="utf-8"))
-    except (OSError, ValidationError) as error:
-        raise ValueError(f"案件文件读取或结构校验失败：{error}") from error
+        # JSON parsers silently keep the last duplicate; a reviewed case must be unambiguous.
+        json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+        case = Case.model_validate_json(text)
+    except (ValidationError, json.JSONDecodeError) as error:
+        raise ValueError(f"案件文件结构校验失败：{error}") from error
     validate_case(case)
     return case
+
+
+def load_case(path: Path | None = None) -> Case:
+    try:
+        text = (path or default_case_path()).read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"案件文件读取失败：{error}") from error
+    return parse_case(text)
+
+
+def _canonical(value):
+    if isinstance(value, dict):
+        result = {key: _canonical(item) for key, item in value.items()}
+        for key in ("all_of", "any_of", "known_by"):
+            if key in result:
+                result[key] = sorted(result[key])
+        return result
+    if isinstance(value, list):
+        return [_canonical(item) for item in value]
+    return value
+
+
+def content_hash(case: Case) -> str:
+    """SHA-256 of the canonical definition: sorted keys and ID sets, ordered steps kept."""
+    data = _canonical(case.model_dump(mode="json"))
+    data["knowledge"] = sorted(data["knowledge"], key=lambda item: item["id"])
+    text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
