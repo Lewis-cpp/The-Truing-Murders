@@ -606,7 +606,7 @@ JSON 列至少检查顶层类型。应用用带版本的数据模型校验字段
 
 ### 7.3 静态数据与运行数据的隔离
 
-1. 案件作者在仅供后端使用的 `assets/cases/` 编写版本包。导入器验证引用、规则白名单、完整及无招供通关路径，将定义写入 DRAFT 版本。
+1. 案件作者在仅供后端使用的 `backend/assets/cases/` 编写版本包。导入器验证引用、规则白名单、完整及无招供通关路径，将定义写入 DRAFT 版本。
 2. 发布前组装所有静态行与 JSON，计算摘要并校验；在同一事务完成发布。发布之后，正文、规则、层顺序与答案均不更新，修订创建新 template_id。
 3. 运行时账号对静态 9 表只有 SELECT；独立导入/维护账号负责发布与下架。AgentManager 和 LLMClient 不持有任何数据库 Session 或凭据。
 4. 每局只引用固定版本，并创建独立状态行。新局不能复制旧局的 Discovery、NPC 数值、出示记录或模型任务。
@@ -1006,7 +1006,7 @@ erDiagram
 | 条件唯一约束 | 部分唯一索引直接约束处理中 NPC 轮次 | 采用生成列，仅处理中映射为 session_id，其余为 NULL，再建唯一索引 | PostgreSQL 的实现更贴近本章约束，无需额外派生列 |
 | 外键与 CHECK | 支持复合外键、唯一及 CHECK | MySQL 8.4 同样支持外键与执行中的 CHECK | 不应以“MySQL 不支持 CHECK/JSON/事务”为选型理由 |
 | 标识和审计时间 | 原生 uuid、timestamptz 适合本章字段 | 可用 BINARY(16) 保存 UUID，DATETIME(6) 统一存 UTC | MySQL 需要明确转换与时区约定，不影响领域模型 |
-| 团队与部署 | 若尚无既定数据库，采用本章方案即可 | 若学校环境、部署或团队已熟悉 MySQL，学习和运维成本可能更低 | 熟悉程度可能比当前用不到的高级能力更重要 |
+| 开发者与部署 | 若尚无既定数据库，采用本章方案即可 | 若学校环境、部署或开发者已熟悉 MySQL，学习和运维成本可能更低 | 熟悉程度可能比当前用不到的高级能力更重要 |
 
 JSON 与索引能力依据 [PostgreSQL JSON 类型与索引](https://www.postgresql.org/docs/18/datatype-json.html)、[MySQL JSON 类型](https://dev.mysql.com/doc/refman/8.4/en/json.html)；条件唯一能力依据 [PostgreSQL 部分索引](https://www.postgresql.org/docs/18/indexes-partial.html)，MySQL 替代方案采用其[生成列索引](https://dev.mysql.com/doc/refman/8.4/en/create-table-secondary-indexes.html)。MySQL CHECK 应使用实际执行的约束，不能声明 `NOT ENFORCED` 后认为数据已受保护。[MySQL CHECK 约束](https://dev.mysql.com/doc/refman/8.4/en/create-table-check-constraints.html)
 

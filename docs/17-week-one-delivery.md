@@ -8,7 +8,7 @@
 
 | W1 任务 | 交付内容 | 边界 |
 | --- | --- | --- |
-| T01 正式案件与切片 | [全案草稿](../assets/cases/case_001/v1/full-case-draft.md) 和 [可运行配置](../assets/cases/case_001/v1/slice.json) | 案件设定与评分原则已获用户确认，详细剧本待真人审阅 |
+| T01 正式案件与切片 | [全案草稿](../backend/assets/cases/case_001/v1/full-case-draft.md) 和 [可运行配置](../backend/assets/cases/case_001/v1/slice.json) | 案件设定与评分原则已获用户确认，详细剧本待真人审阅 |
 | T02 内存 Case／Game | 严格配置、引用及可达性校验；不可变候选快照，校验完成才替换状态 | 进程内单局；退出丢失；不声称具备数据库事务和并发能力 |
 | T03 领域规则 | 阶段守卫、调查、出示、单层谎言、数值边界、确定性评分、冻结复盘 | 采用 W1 专用固定契约，没有提前实现全案规则解释器 |
 | T04 可玩入口 | `uv run --offline truing-play`；玩家自主选择动作和结构化指控 | 1 场景、1 可审讯 NPC、3 证据；其余嫌疑人只作指控候选 |
@@ -31,7 +31,7 @@
 
 ## 实现与权限边界
 
-领域数据及固定契约放在 `src/backend/domain/models.py`，阶段与情绪在 `state_machine.py`，
+领域数据及固定契约放在 `backend/src/backend/domain/models.py`，阶段与情绪在 `state_machine.py`，
 证据引用和白名单投影在 `evidence.py`，纯规则计算在 `rules.py`。
 `application/case.py` 校验并载入案件，`application/game.py` 维护一局内存状态，
 `cli.py` 只接收玩家输入并调用实际用例。复用已有 Pydantic，不增加新第三方库。
@@ -47,7 +47,7 @@ NPC固定说法投影仅提供当前说法、自己有权披露的条目、实�
 完整真相只在正式结案后对玩家投影开放。结案后读复盘不修改冻结的调查输入。
 本地作者当然能查看案件资源文件；CLI不提供对本机文件所有者保密的安全边界。
 
-切片资源仅打包到后端，前端公开目录仍为 `assets/frontend/`。
+切片资源仅打包到后端，前端公开目录为 `frontend/public/`。
 现有 Vue 页面仍是基础工程检查页，没有把案件答案嵌入网页。
 
 ## 验证记录
@@ -75,7 +75,7 @@ NPC固定说法投影仅提供当前说法、自己有权披露的条目、实�
 非法阶段无副作用、非法引用不结案、会话隔离、结案冻结、退出与中途取消。
 终端交互测试直接禁用套接字连接，并移除测试环境中的数据库和模型密钥变量。
 
-静态预期位于 `tests/data/expected/week_one_verdicts.json`，数值直接写入，
+静态预期位于 `backend/tests/data/expected/week_one_verdicts.json`，数值直接写入，
 不导入规则函数来生成期望；程序测试不能替代另一位真人对故事与预期的独立审核。
 
 可复现命令见 [README](../README.md#先玩第一周切片)。

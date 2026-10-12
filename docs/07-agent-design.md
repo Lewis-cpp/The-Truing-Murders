@@ -488,7 +488,7 @@ AgentManager 的调度是固定分支：核对 role 白名单、NPC 目标是否
 
 GenerationPermit 是内部调用约束，不是客户端可提交的授权 token，也不能独自证明数据库仍允许保存。Game Engine 仍须在发出前核验预留记录，在返回后复核来源状态与 active_attempt_id。AgentManager 不拥有预留额度、取消任务、重试或提交事务的权限。
 
-后续最小文件落点为 `application/memory.py`、`application/agents.py`、`application/conversation.py` 和 `infrastructure/llm_client.py`，均位于已有 `src/backend/` 下；小型 DTO 可与使用方同文件。Host、Review 的固定投影复用对应用例，不为了名称新建多层目录。
+后续最小文件落点为 `application/memory.py`、`application/agents.py`、`application/conversation.py` 和 `infrastructure/llm_client.py`，均位于已有 `backend/src/backend/` 下；小型 DTO 可与使用方同文件。Host、Review 的固定投影复用对应用例，不为了名称新建多层目录。
 
 ## 12. 调用流程与示例上下文
 
@@ -537,7 +537,7 @@ GenerationPermit 是内部调用约束，不是客户端可提交的授权 token
 
 ### 13.1 不依赖真实模型的检查
 
-实现时在 `tests/backend/application/test_npc_context.py` 起步，使用普通固定数据和可替换 LLMClient；不需要 Agent 测试框架。以下检查针对公共行为，当前文档没有声称这些测试已经实现或通过。
+实现时在 `backend/tests/application/test_npc_context.py` 起步，使用普通固定数据和可替换 LLMClient；不需要 Agent 测试框架。以下检查针对公共行为，当前文档没有声称这些测试已经实现或通过。
 
 | 场景 | 预期结果 |
 | --- | --- |

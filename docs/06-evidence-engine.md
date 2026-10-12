@@ -662,7 +662,7 @@ any 分支存在其他入口时，图上有环不一定不可达；应从初始�
 
 | 位置 | 保存内容 | 约束 |
 | --- | --- | --- |
-| `assets/cases/` 的离线 JSON | 证据、场景动作、规则、谎言与评分等作者配置 | 只供后端导入，不能作为前端静态目录公开 |
+| `backend/assets/cases/` 的离线 JSON | 证据、场景动作、规则、谎言与评分等作者配置 | 只供后端导入，不能作为前端静态目录公开 |
 | `case_versions` | 完整案件包 JSON、case_id、版本、摘要、结构及执行版本 | `(case_id, version)` 唯一，发布后只读 |
 | `game_sessions.state_json` | Discovery、SceneProgress、NPCState、LieProgress、consumed_effect_keys | 单局唯一快照；只在会话行锁事务中整体更新 |
 | `action_requests` | 请求、规范化输入摘要、固定结果、处理状态 | `(visitor_id, request_id)` 唯一 |
@@ -724,6 +724,6 @@ any 分支存在其他入口时，图上有环不一定不可达；应从初始�
 | 修改 explanation，或补写模型评价 | 分数不变；未招供也存在正确指控路径 |
 | 已结案后请求调查或打开复盘 | 拒绝调查；复盘不补写未获得证据 |
 
-后续代码放在既有 `src/backend/domain/`，起步只需 `evidence.py` 处理引用与投影、`rules.py` 处理条件和固定流水线，事务仍在应用层。用普通函数与类型白名单实现，无需类层次、脚本沙箱、消息队列或通用工作流框架。测试放入 `tests/backend/domain/`，按公共行为验证；事务与唯一约束再用选定数据库验证。
+后续代码放在既有 `backend/src/backend/domain/`，起步只需 `evidence.py` 处理引用与投影、`rules.py` 处理条件和固定流水线，事务仍在应用层。用普通函数与类型白名单实现，无需类层次、脚本沙箱、消息队列或通用工作流框架。测试放入 `backend/tests/domain/`，按公共行为验证；事务与唯一约束再用选定数据库验证。
 
 本文交付结构和执行契约，JSON 片段可独立解析，但引用的是示例案件的部分条目，不能直接当作完整可发布案件。正式实现后才能报告规则执行、事务及完整通关验收通过。

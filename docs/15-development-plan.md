@@ -2,11 +2,11 @@
 
 本文依据 `docs/01`～`docs/14` 和 [项目设计原则](AI_rules.md)，将现有设计落实到 Python 模块、目录职责和开发顺序。本次只提供目录规划，不创建应用脚手架，不表示接口、数据库或测试已经实现。
 
-**采用 `src/backend/` 下的 `api / application / domain / infrastructure` 四层模块化单体。Game Engine 编排用例，领域层决定玩法，Repositories 保存结果，LLM Gateway 只生成受约束的表达。**
+**采用 `backend/src/backend/` 下的 `api / application / domain / infrastructure` 四层模块化单体。Game Engine 编排用例，领域层决定玩法，Repositories 保存结果，LLM Gateway 只生成受约束的表达。**
 
 ## 1. 目录选择与设计基线
 
-沿用 [总体架构](03-architecture-design.md) 和仓库 `AGENTS.md` 的 `src/`、`tests/`、`assets/` 布局。`backend` 本身就是 Python 包，不再增加职责相同的 `backend/app/` 层；启动对象为 `backend.main:app`。
+仓库拆为 `backend/` 和 `frontend/` 两个独立子项目，各自带依赖、锁文件、工具配置和 `src/`、`tests/`；根目录只放文档、CI 和 `.gitignore`（见仓库 `AGENTS.md`）。后端 Python 包仍名为 `backend`，位于 `backend/src/backend/`，不再增加职责相同的 `app/` 层；启动对象为 `backend.main:app`。前后端只通过 `/api` 通信，互不读取对方目录。
 
 各 Engine 是同一个后端进程内的模块或普通对象，不拆成服务。Repositories 使用 SQLAlchemy 的具体查询与保存函数，不为每张表增加接口、实现、基类和通用 CRUD 层。
 
@@ -33,169 +33,132 @@
 ```text
 The-Truing-Murders/
 ├── AGENTS.md
-├── README.md                             # 安装、配置、启动、迁移与检查命令
-├── pyproject.toml                        # Python 包、依赖、Ruff 与 pytest 配置
-├── alembic.ini                           # 迁移位置；不写数据库密码
-├── .env.example                          # 配置项示例；不含真实密钥
+├── README.md                             # 两个子项目的安装、配置、启动、迁移与检查命令
 ├── .gitignore                            # 忽略环境、缓存、日志、报告和备份
-├── src/
-│   ├── backend/
-│   │   ├── __init__.py
-│   │   ├── main.py                       # FastAPI 装配与应用生命周期
-│   │   ├── config.py                     # 读取并验证服务端配置
-│   │   ├── import_case.py                # 离线案件导入命令入口
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   ├── dependencies.py           # Cookie、请求头与用例依赖获取
-│   │   │   ├── middleware.py             # Origin、请求体大小、trace 与缓存策略
-│   │   │   ├── errors.py                 # 安全的 HTTP 错误映射
-│   │   │   ├── routes/
-│   │   │   │   ├── __init__.py           # 汇总 /api/v1 路由
-│   │   │   │   ├── visitors.py           # 匿名访问者初始化
-│   │   │   │   ├── cases.py              # 公开案件列表与简介
-│   │   │   │   ├── sessions.py           # 创建、重开、继续、加载与请求查询
-│   │   │   │   ├── investigation.py      # 场景、取证、背包、NPC 档案、图与时间线
-│   │   │   │   ├── conversations.py     # 审讯、聊天、出示、历史与表达重试
-│   │   │   │   └── accusations.py       # 准备、草稿、指控、复盘与完成
-│   │   │   └── schemas/
-│   │   │       ├── __init__.py
-│   │   │       ├── common.py             # 公开错误、请求元数据与响应外壳
-│   │   │       ├── sessions.py           # 访问者、案件、会话与请求记录 DTO
-│   │   │       ├── investigation.py      # 场景、证据、人物与图表 DTO
-│   │   │       ├── conversations.py     # 审讯输入与玩家可读对话 DTO
-│   │   │       └── accusations.py       # 草稿、提交、判定与复盘 DTO
-│   │   ├── application/
-│   │   │   ├── __init__.py
-│   │   │   ├── auth.py                   # 匿名令牌签发、摘要与身份核验
-│   │   │   ├── game.py                   # Game Engine；游戏用例与业务事务
-│   │   │   ├── generation.py             # Game Engine 的表达任务与计量编排
-│   │   │   ├── case.py                   # Case Service；载入、校验与离线发布
-│   │   │   ├── save_load.py              # Save/Load；一致读取与版本兼容检查
-│   │   │   ├── memory.py                 # Memory Service；上下文、摘要与 epoch
-│   │   │   ├── agents.py                 # Agent Manager；受限角色路由
-│   │   │   ├── conversation.py           # 输出内容检查与固定降级
-│   │   │   └── contracts.py              # 跨应用模块使用的内部 DTO
-│   │   ├── domain/
-│   │   │   ├── __init__.py
-│   │   │   ├── models.py                 # 案件、会话、状态、规则输入与结果类型
-│   │   │   ├── case_validation.py        # 定义引用、规则配置与发布不变量
-│   │   │   ├── state_machine.py          # 阶段枚举、允许动作、转换与守卫
-│   │   │   ├── evidence.py               # Evidence Engine；持有、披露与安全投影
-│   │   │   ├── rules.py                  # Rule Engine；数值、谎言、进度与评分
-│   │   │   └── errors.py                 # 与 HTTP 无关的领域错误
-│   │   └── infrastructure/
+├── .github/workflows/                    # 后端、前端分别运行检查
+├── backend/                              # Python 子项目；所有后端命令在此目录执行
+│   ├── pyproject.toml                    # Python 包、依赖、Ruff 与 pytest 配置
+│   ├── uv.lock
+│   ├── alembic.ini                       # 迁移位置；不写数据库密码
+│   ├── compose.yaml                      # 本地 PostgreSQL
+│   ├── .env.example                      # 配置项示例；不含真实密钥
+│   ├── src/
+│   │   └── backend/
 │   │       ├── __init__.py
-│   │       ├── llm_client.py             # 唯一 LLM Gateway 与供应商协议适配
-│   │       └── database/
+│   │       ├── main.py                   # FastAPI 装配与应用生命周期
+│   │       ├── config.py                 # 读取并验证服务端配置
+│   │       ├── cli.py                    # W1 命令行切片入口
+│   │       ├── import_case.py            # 离线案件导入命令入口
+│   │       ├── api/
+│   │       │   ├── __init__.py
+│   │       │   ├── dependencies.py       # Cookie、请求头与用例依赖获取
+│   │       │   ├── middleware.py         # Origin、请求体大小、trace 与缓存策略
+│   │       │   ├── errors.py             # 安全的 HTTP 错误映射
+│   │       │   ├── routes/
+│   │       │   │   ├── __init__.py       # 汇总 /api/v1 路由
+│   │       │   │   ├── visitors.py       # 匿名访问者初始化
+│   │       │   │   ├── cases.py          # 公开案件列表与简介
+│   │       │   │   ├── sessions.py       # 创建、重开、继续、加载与请求查询
+│   │       │   │   ├── investigation.py  # 场景、取证、背包、NPC 档案、图与时间线
+│   │       │   │   ├── conversations.py  # 审讯、聊天、出示、历史与表达重试
+│   │       │   │   └── accusations.py    # 准备、草稿、指控、复盘与完成
+│   │       │   └── schemas/
+│   │       │       ├── __init__.py
+│   │       │       ├── common.py         # 公开错误、请求元数据与响应外壳
+│   │       │       ├── sessions.py       # 访问者、案件、会话与请求记录 DTO
+│   │       │       ├── investigation.py  # 场景、证据、人物与图表 DTO
+│   │       │       ├── conversations.py  # 审讯输入与玩家可读对话 DTO
+│   │       │       └── accusations.py    # 草稿、提交、判定与复盘 DTO
+│   │       ├── application/
+│   │       │   ├── __init__.py
+│   │       │   ├── auth.py               # 匿名令牌签发、摘要与身份核验
+│   │       │   ├── game.py               # Game Engine；游戏用例与业务事务
+│   │       │   ├── generation.py         # Game Engine 的表达任务与计量编排
+│   │       │   ├── case.py               # Case Service；载入、校验与离线发布
+│   │       │   ├── save_load.py          # Save/Load；一致读取与版本兼容检查
+│   │       │   ├── memory.py             # Memory Service；上下文、摘要与 epoch
+│   │       │   ├── agents.py             # Agent Manager；受限角色路由
+│   │       │   ├── conversation.py       # 输出内容检查与固定降级
+│   │       │   └── contracts.py          # 跨应用模块使用的内部 DTO
+│   │       ├── domain/
+│   │       │   ├── __init__.py
+│   │       │   ├── models.py             # 案件、会话、状态、规则输入与结果类型
+│   │       │   ├── case_validation.py    # 定义引用、规则配置与发布不变量
+│   │       │   ├── state_machine.py      # 阶段枚举、允许动作、转换与守卫
+│   │       │   ├── evidence.py           # Evidence Engine；持有、披露与安全投影
+│   │       │   ├── rules.py              # Rule Engine；数值、谎言、进度与评分
+│   │       │   └── errors.py             # 与 HTTP 无关的领域错误
+│   │       └── infrastructure/
 │   │           ├── __init__.py
-│   │           ├── session.py           # Engine、Session 工厂与隔离级别配置
-│   │           ├── models/
-│   │           │   ├── __init__.py       # Base、metadata 与映射注册
-│   │           │   ├── case.py          # 9 张静态案件表
-│   │           │   ├── game.py          # 8 张身份、游戏与审计表
-│   │           │   └── conversation.py  # 4 张对话、尝试与摘要表
-│   │           ├── repositories/
-│   │           │   ├── __init__.py
-│   │           │   ├── visitors.py      # 凭据摘要、访问者锁与当前局入口
-│   │           │   ├── cases.py         # 固定版本读取、组装与维护账号导入
-│   │           │   ├── games.py         # 会话快照、证据、NPC、请求、事件与指控
-│   │           │   └── conversations.py # 对话、attempt、用量与摘要条件写入
-│   │           └── migrations/
-│   │               ├── env.py           # Alembic 环境与 metadata 接入
-│   │               ├── script.py.mako   # Alembic 标准迁移模板
-│   │               └── versions/
-│   │                   └── 0001_initial_schema.py
-│   └── frontend/                        # Vue 应用；内部目录见第 11 篇
-├── assets/
-│   ├── cases/
-│   │   └── case_001/
-│   │       └── v1/
-│   │           └── case.json            # 人工审核的完整版本包；仅后端导入
-│   ├── prompts/
-│   │   └── npc_system_v1.txt             # 受版本管理的 NPC 系统模板
-│   └── frontend/                        # 可公开且不剧透的图片、字体
-├── tests/
-│   ├── conftest.py                      # 固定案例、可控时钟与模型；默认离线
-│   ├── data/
+│   │           ├── llm_client.py         # 唯一 LLM Gateway 与供应商协议适配
+│   │           └── database/
+│   │               ├── __init__.py
+│   │               ├── session.py        # Engine、Session 工厂与隔离级别配置
+│   │               ├── models/
+│   │               │   ├── __init__.py   # Base、metadata 与映射注册
+│   │               │   ├── case.py       # 9 张静态案件表
+│   │               │   ├── game.py       # 8 张身份、游戏与审计表
+│   │               │   └── conversation.py  # 4 张对话、尝试与摘要表
+│   │               ├── repositories/
+│   │               │   ├── __init__.py
+│   │               │   ├── visitors.py   # 凭据摘要、访问者锁与当前局入口
+│   │               │   ├── cases.py      # 固定版本读取、组装与维护账号导入
+│   │               │   ├── games.py      # 会话快照、证据、NPC、请求、事件与指控
+│   │               │   └── conversations.py  # 对话、attempt、用量与摘要条件写入
+│   │               └── migrations/
+│   │                   ├── env.py        # Alembic 环境与 metadata 接入
+│   │                   ├── script.py.mako  # Alembic 标准迁移模板
+│   │                   └── versions/
+│   │                       └── 0001_initial_schema.py
+│   ├── assets/                           # 仅后端读取，含答案和秘密
+│   │   ├── database/
+│   │   │   └── init.sql                  # 首次初始化时建立测试库
 │   │   ├── cases/
-│   │   │   ├── video_case.json
-│   │   │   ├── layered_case.json
-│   │   │   └── scoring_case.json
-│   │   ├── expected/
-│   │   │   ├── verdicts.json             # 人工独立填写的评分预期
-│   │   │   └── playable_paths.json       # 完整、无招供及不同顺序路径
-│   │   └── agent/
-│   │       ├── adversarial_outputs.json
-│   │       └── evaluation_cases.jsonl
-│   ├── backend/
-│   │   ├── conftest.py                  # 测试专用实库、迁移与应用
-│   │   ├── domain/
-│   │   │   ├── test_case_validation.py
-│   │   │   ├── test_evidence.py
-│   │   │   ├── test_rules.py
-│   │   │   ├── test_lie_system.py
-│   │   │   ├── test_state_machine.py
-│   │   │   └── test_judgement.py
-│   │   ├── application/
-│   │   │   ├── test_npc_context.py
-│   │   │   ├── test_memory.py
-│   │   │   └── test_conversation.py
-│   │   ├── infrastructure/
-│   │   │   ├── test_llm_client.py
-│   │   │   └── test_database.py
-│   │   ├── integration/
-│   │   │   ├── conftest.py
-│   │   │   ├── test_game_flow.py
-│   │   │   ├── test_concurrency.py
-│   │   │   ├── test_save_load.py
-│   │   │   ├── test_failure_recovery.py
-│   │   │   └── test_non_ai_latency.py
-│   │   └── api/
-│   │       ├── conftest.py
-│   │       ├── test_sessions.py
-│   │       ├── test_investigation.py
-│   │       ├── test_conversations.py
-│   │       ├── test_accusations.py
-│   │       └── test_contracts.py
-│   ├── frontend/                       # Vue 组件与页面状态检查
-│   ├── e2e/
-│   │   ├── conftest.py
-│   │   ├── test_case_completion.py
-│   │   ├── test_npc_boundaries.py
-│   │   ├── test_recovery.py
-│   │   └── test_accessibility.py
-│   └── agent_eval/
-│       └── test_live_npc.py             # 显式启用、限制预算的真实模型评测
+│   │   │   └── case_001/
+│   │   │       └── v1/
+│   │   │           ├── slice.json        # W1 切片
+│   │   │           └── case.json         # 人工审核的完整版本包；仅后端导入
+│   │   └── prompts/
+│   │       └── npc_system_v1.txt         # 受版本管理的 NPC 系统模板
+│   └── tests/                            # 结构见第 14 篇第 13 节
+│       ├── conftest.py
+│       ├── data/                         # 合成案件、人工预期、模型评测题集
+│       ├── domain/
+│       ├── application/
+│       ├── infrastructure/
+│       ├── integration/
+│       ├── api/
+│       ├── e2e/                          # 浏览器到数据库，由 pytest 驱动
+│       └── agent_eval/                   # 显式启用、限制预算的真实模型评测
+├── frontend/                             # Node 子项目；所有前端命令在此目录执行
+│   ├── package.json                      # npm scripts：dev、build、typecheck、lint、test
+│   ├── package-lock.json
+│   ├── vite.config.ts                    # 开发代理 /api → 127.0.0.1:8000
+│   ├── tsconfig.json
+│   ├── eslint.config.js
+│   ├── .prettierrc.json
+│   ├── src/                              # Vue 应用；内部目录见第 11 篇
+│   ├── public/                           # 可公开且不剧透的图片、字体
+│   └── tests/                            # 组件与页面状态检查
 └── docs/
     ├── AI_rules.md
-    ├── 01-project-scope.md
-    ├── 02-requirements-analysis.md
-    ├── 03-architecture-design.md
-    ├── 04-domain-model.md
-    ├── 05-state-machine.md
-    ├── 06-evidence-engine.md
-    ├── 07-agent-design.md
-    ├── 08-lie-system.md
-    ├── 09-database-design.md
-    ├── 10-api-design.md
-    ├── 11-frontend-design.md
-    ├── 12-memory-design.md
-    ├── 13-security.md
-    ├── 14-testing.md
-    └── 15-development-plan.md
+    ├── 01-project-scope.md … 14-testing.md
+    ├── 15-development-plan.md
+    ├── 16-development-roadmap.html       # 一人开发排期
+    └── 17-week-one-delivery.md
 ```
 
-`src/` 是源码容器，`backend/` 及其普通 Python 子包放置 `__init__.py`；资源、文档和迁移版本目录不需要伪装成业务包。`pyproject.toml` 配置 `src` 包发现。案件和模板使用显式配置的资源根路径，不依赖启动时的当前工作目录。
+`backend/src/` 是源码容器，`backend` 包及其普通 Python 子包放置 `__init__.py`；资源、文档和迁移版本目录不需要伪装成业务包。`backend/pyproject.toml` 配置 `src` 包发现。案件和模板使用显式配置的资源根路径，不依赖启动时的当前工作目录。
 
 ## 3. 每个目录的职责
 
 ### 3.1 后端源码目录
 
-除源码容器一行外，下表路径均相对于 `src/backend/`。
+除源码容器一行外，下表路径均相对于 `backend/src/backend/`。
 
 | 目录 | 职责 | 明确边界 |
 | --- | --- | --- |
-| `src/`、`backend/` | 前者容纳源码，后者是后端包与装配入口 | `main.py` 连接各层、注册路由和生命周期，不写玩法规则 |
+| `backend/src/`、`backend/src/backend/` | 前者容纳源码，后者是后端包与装配入口 | `main.py` 连接各层、注册路由和生命周期，不写玩法规则 |
 | `api/` | HTTP 适配、输入结构检查、Cookie/Origin、异常映射 | 不执行规则，不查询 ORM，不请求模型 |
 | `api/routes/` | 按玩家业务资源组织端点，将合法输入交给用例 | 不暴露通用 Agent、规则执行或状态补丁 API |
 | `api/schemas/` | Pydantic 请求与响应模型；拒绝未知输入字段，白名单输出 | 请求、响应分别定义；不能复用 ORM 或完整领域对象作为公开响应 |
@@ -214,34 +177,35 @@ The-Truing-Murders/
 
 | 目录 | 职责 | 边界 |
 | --- | --- | --- |
-| 仓库根目录 | 项目级说明、依赖和工具配置 | 不散放 Engine、数据库脚本或业务代码 |
-| `src/frontend/` | 浏览器页面、交互和公开 API 客户端 | 不保存模型密钥，不持有完整案件包，不作权威判定 |
-| `assets/` | 版本化的非代码资源 | 不能把整个目录挂成前端静态目录 |
-| `assets/cases/` | 离线案件导入源 | 含答案和秘密，仅后端维护流程读取 |
-| `assets/cases/case_001/` | 按案件 ID 组织内容 | 不存任何玩家运行状态 |
-| `assets/cases/case_001/v1/` | 某次审核发布的固定内容版本 | 修订发布新版本，不覆盖已被会话引用的定义 |
-| `assets/prompts/` | 后端维护的系统模板与模板版本 | 模板不内嵌密钥或全案真相；固定承认和回避台词属于案件包 |
-| `assets/frontend/` | 可直接公开的图片、字体等素材 | 与含秘密的 cases、prompts 分开打包 |
+| 仓库根目录 | 项目级说明、CI 和 `.gitignore` | 不放依赖清单、工具配置、Engine、数据库脚本或业务代码 |
+| `backend/` | 后端子项目：依赖、锁文件、迁移配置、Compose 与 `.env` | 不读取 `frontend/` 下任何文件 |
+| `frontend/` | 前端子项目：npm 依赖、Vite、TypeScript、ESLint、Prettier | 不读取 `backend/` 下任何文件，只通过 `/api` 访问后端 |
+| `frontend/src/` | 浏览器页面、交互和公开 API 客户端 | 不保存模型密钥，不持有完整案件包，不作权威判定 |
+| `backend/assets/` | 后端读取的版本化非代码资源 | 不能挂成前端静态目录 |
+| `backend/assets/cases/` | 离线案件导入源 | 含答案和秘密，仅后端维护流程读取 |
+| `backend/assets/cases/case_001/` | 按案件 ID 组织内容 | 不存任何玩家运行状态 |
+| `backend/assets/cases/case_001/v1/` | 某次审核发布的固定内容版本 | 修订发布新版本，不覆盖已被会话引用的定义 |
+| `backend/assets/prompts/` | 后端维护的系统模板与模板版本 | 模板不内嵌密钥或全案真相；固定承认和回避台词属于案件包 |
+| `frontend/public/` | 可直接公开的图片、字体等素材 | 位于另一个子项目，与含秘密的 cases、prompts 物理隔离 |
 | `docs/` | 需求、架构、契约、验收和开发计划 | 记录设计，不把规划写成已完成的实现 |
 
 ### 3.3 测试目录
 
 | 目录 | 职责 |
 | --- | --- |
-| `tests/` | 全项目检查入口及共用的最小测试依赖 |
-| `tests/data/` | 受版本管理的合成输入和独立预期，不放真实凭据 |
-| `tests/data/cases/` | 小型完整测试案件；录像例与分层实验室例相互独立 |
-| `tests/data/expected/` | 人工评分答案和合法通关路径，不能调用被测函数生成 expected |
-| `tests/data/agent/` | 固定恶意输出、异常响应、正常与攻击评测题集 |
-| `tests/backend/` | 后端检查与实库、应用的共用配置 |
-| `tests/backend/domain/` | 规则、证据、状态机、谎言与评分，无数据库和模型 |
-| `tests/backend/application/` | 角色隔离、Memory、Agent 和表达降级，使用可控模型替身 |
-| `tests/backend/infrastructure/` | Gateway 真实解析配假传输；数据库映射、权限和迁移配真实目标库 |
-| `tests/backend/integration/` | Game Engine 的事务、幂等、并发、存档恢复、计量和故障闭环 |
-| `tests/backend/api/` | 真实 FastAPI、应用与测试数据库的 HTTP 契约；不 mock Game Engine |
-| `tests/frontend/` | 组件、状态更新和迟到响应隔离 |
-| `tests/e2e/` | 浏览器到数据库的完整通关、恢复与可访问性 |
-| `tests/agent_eval/` | 独立开启的真实模型语义评测，记录样本、用量和可见违规 |
+| `backend/tests/` | 后端检查入口，以及实库、应用的共用配置 |
+| `backend/tests/data/` | 受版本管理的合成输入和独立预期，不放真实凭据 |
+| `backend/tests/data/cases/` | 小型完整测试案件；录像例与分层实验室例相互独立 |
+| `backend/tests/data/expected/` | 人工评分答案和合法通关路径，不能调用被测函数生成 expected |
+| `backend/tests/data/agent/` | 固定恶意输出、异常响应、正常与攻击评测题集 |
+| `backend/tests/domain/` | 规则、证据、状态机、谎言与评分，无数据库和模型 |
+| `backend/tests/application/` | 角色隔离、Memory、Agent 和表达降级，使用可控模型替身 |
+| `backend/tests/infrastructure/` | Gateway 真实解析配假传输；数据库映射、权限和迁移配真实目标库 |
+| `backend/tests/integration/` | Game Engine 的事务、幂等、并发、存档恢复、计量和故障闭环 |
+| `backend/tests/api/` | 真实 FastAPI、应用与测试数据库的 HTTP 契约；不 mock Game Engine |
+| `backend/tests/e2e/` | 浏览器到数据库的完整通关、恢复与可访问性，由 pytest 驱动 |
+| `backend/tests/agent_eval/` | 独立开启的真实模型语义评测，记录样本、用量和可见违规 |
+| `frontend/tests/` | 组件、状态更新和迟到响应隔离 |
 
 Rule Test、State Machine Test、Agent Test 等使用第 14 篇的 marker 分类，不复制同一测试。测试文件按行为拆分即可，例如 `test_lie_system.py` 和 `test_judgement.py` 都可以验证 `domain/rules.py`，不要求新增同名生产模块。
 
@@ -298,7 +262,7 @@ domain                                   → Python 标准库
 | `application/conversation.py` | 仅经 Agent Manager 发起授权表达；禁止额外模型审核或修复循环 |
 | `application/agents.py` | 仅经唯一 Gateway 调用；不得授予工具、规划游戏动作或自行重试 |
 | `infrastructure/database/` | 禁止任何 LLM 调用，包括 Repository、ORM hook 和迁移 |
-| `src/frontend/` | 禁止直连模型服务或保存模型密钥 |
+| `frontend/` 全部代码 | 禁止直连模型服务或保存模型密钥 |
 
 探索、图表查询、指控评分和存档恢复均为零模型调用路径。获取证据、谎言击破、数值变化和状态转换的计算也禁止调用模型；出示证据提交后可以另行生成 NPC 表达。每个首次生成或显式重试命令最多一次上游调用；模型输出只有文本候选及调用元数据，永远不能变成 `RuleOutcome`、规则事件或状态补丁。
 
@@ -333,7 +297,7 @@ Memory 生成摘要候选、epoch 变更建议；Game Engine 在相应事务中�
 | 会话归属、当前局、幂等、版本、事务、生成额度与重试次数 | `application/` 的相应用例；属于用例和运行策略 |
 | 历史后缀、摘要来源、token 分配与授权段同步 | `application/memory.py`；不得据此新增玩法权限 |
 | 输出结构安全 | `infrastructure/llm_client.py`；游戏语义一致性由 `application/conversation.py` 检查 |
-| 案件答案、证据内容、数值参数、固定说法和评分配置 | `assets/cases/` 审核后导入固定数据库版本，由领域代码解释 |
+| 案件答案、证据内容、数值参数、固定说法和评分配置 | `backend/assets/cases/` 审核后导入固定数据库版本，由领域代码解释 |
 
 API 只判断字段是否符合协议，例如整数、长度和必填；“持有的证据是否能击破某层谎言”必须进入领域规则。数据库唯一键、外键和 CHECK 是一致性保护，不能代替业务判定；Prompt 只能描述已经确定的表达权限，不能成为业务规则的执行位置。
 
@@ -403,36 +367,39 @@ GET 不承担写清理或生成任务。第 13 篇要求的过期维护由 `main
 
 `import_case.py` 是离线 CLI 适配入口：读取 JSON，调用 Case Service 和领域发布校验，经维护账号在事务中写入静态表并发布。它不挂到玩家 API，不覆盖已发布版本，不在 FastAPI 启动时自动导入。案件完整路径和无招供路径由同一领域规则执行验证。
 
-根 `.gitignore` 随工具链加入 `.env`、`.venv/`、`__pycache__/`、pytest/Ruff 缓存、覆盖率、构建输出、日志、测试报告和数据库备份；保留不含秘密的 `.env.example`。后端部署需要随附案件导入源或模板资源时明确打包路径，前端发布只包含 `assets/frontend/` 的公开资源。
+根 `.gitignore` 覆盖两个子项目，随工具链加入 `.env`、`.venv/`、`__pycache__/`、pytest/Ruff 缓存、覆盖率、构建输出、日志、测试报告和数据库备份；保留不含秘密的 `.env.example`。后端部署需要随附案件导入源或模板资源时明确打包路径，前端发布只包含 `frontend/` 的构建产物和 `frontend/public/` 的公开资源。
 
 ### 8.2 分阶段实现
 
-| 阶段 | 建立的主要内容 | 完成标准 |
-| --- | --- | --- |
-| 1：领域与案件 | `domain/`、案件定义、领域测试和人工预期 | 固定输入完成取证、分层谎言和三类评分；无招供也存在正确路径 |
-| 2：持久化闭环 | ORM、迁移、Repositories、Case、Game、Save/Load | 创建、取证、出示、指控、恢复可原子提交；实库验证锁、约束与幂等 |
-| 3：HTTP 与固定回复 | `api/`、匿名凭据、固定 Conversation、API 测试 | 第 10 篇端点闭环；无模型可完整通关，GET 无副作用 |
-| 4：一个 NPC 的受限表达 | Memory、Agent Manager、Conversation、Gateway、生成编排 | 最终 messages 知识隔离，超时、未知用量、迟到及显式重试符合契约 |
-| 5：完整 MVP | 四 NPC、全部场景证据、三级记忆、前端、E2E | 第 14 篇 P0、不同调查顺序、故障恢复和固定模式全路径通过 |
-| 6：表达评测与演示 | 主备模型题集、长对话、实际延迟和成本记录 | 分别报告程序越权、候选违规和最终可见违规；性能有实测环境 |
+以下阶段与一人开发路线图的版本一一对应，排期、估时和任务见 [开发路线图](16-development-roadmap.html)。阶段 1 已随 W1 切片完成最小版本。
 
-测试随相应实现加入。阶段 1 不先创建所有 API 和 ORM 文件；阶段 4 不为四个 NPC 复制四套代码。Host/Review 润色、语义摘要、SSE、向量检索和多人能力不进入默认实现清单。
+| 阶段 | 版本 | 建立的主要内容 | 完成标准 |
+| --- | --- | --- | --- |
+| 1：领域与案件 | v0.1（已完成切片）→ v0.3 | `domain/`、案件定义、领域测试和人工预期 | 固定输入完成取证、分层谎言和三类评分；无招供也存在正确路径 |
+| 2：持久化闭环 | v0.2 | ORM、迁移、Repositories、Case、Game、Save/Load | 创建、取证、出示、指控、恢复可原子提交；实库验证锁、约束与幂等 |
+| 3：HTTP 与固定回复 | v0.2 → v0.3 | `api/`、匿名凭据、固定 Conversation、API 测试 | 第 10 篇端点闭环；无模型可完整通关，GET 无副作用 |
+| 4：一个 NPC 的受限表达 | v0.4 | Memory、Agent Manager、Conversation、Gateway、生成编排 | 最终 messages 知识隔离，超时、未知用量、迟到及显式重试符合契约 |
+| 5：完整 MVP | v0.5 → v0.6 | 四 NPC、全部场景证据、三级记忆、前端、E2E | 第 14 篇 P0、不同调查顺序、故障恢复和固定模式全路径通过 |
+| 6：表达评测与发布 | v1.0 | 模型题集、长对话、实际延迟和成本记录、UI 美化 | 分别报告程序越权、候选违规和最终可见违规；性能有实测环境 |
+
+一人开发同一时间只推进一个阶段，测试随相应实现加入。阶段 1 不先创建所有 API 和 ORM 文件；阶段 4 不为四个 NPC 复制四套代码。Host/Review 润色、语义摘要、SSE、向量检索和多人能力不进入默认实现清单。
 
 ### 8.3 首个工具链的命令约定
 
-以下命令是实现 `pyproject.toml`、依赖和对应文件后的约定，现在不能据此宣称游戏检查通过。使用 FastAPI、SQLAlchemy、选定数据库驱动和 Alembic；开发检查用 Ruff、pytest，浏览器阶段再加入第 14 篇所需工具，不增加只重命名这些命令的包装脚本。
+以下命令是实现对应文件后的约定，现在不能据此宣称游戏检查通过。后端使用 uv 管理依赖，所有后端命令在 `backend/` 内执行；FastAPI、SQLAlchemy、psycopg 和 Alembic 已在 `backend/pyproject.toml` 中，开发检查用 Ruff、pytest，浏览器阶段再加入第 14 篇所需工具，不增加只重命名这些命令的包装脚本。前端命令见 README。
 
 ```bash
-python -m pip install -e ".[dev]"
-python -m uvicorn backend.main:app --reload
-python -m alembic -c alembic.ini upgrade head
-python -m backend.import_case assets/cases/case_001/v1/case.json
-python -m ruff format --check src/backend tests
-python -m ruff check src/backend tests
-python -m pytest tests/backend/domain -q
-python -m pytest tests/backend/application tests/backend/infrastructure/test_llm_client.py -q
-python -m pytest tests/backend -m "integration and not api and not performance" -q
-python -m pytest tests/backend/api -q
+cd backend
+uv sync --locked
+uv run uvicorn backend.main:app --reload --reload-dir src/backend
+uv run alembic upgrade head
+uv run python -m backend.import_case assets/cases/case_001/v1/case.json
+uv run ruff format --check src tests
+uv run ruff check src tests
+uv run pytest tests/domain -q
+uv run pytest tests/application tests/infrastructure/test_llm_client.py -q
+uv run pytest tests -m "integration and not api and not performance" -q
+uv run pytest tests/api -q
 ```
 
 README 应记录实际可运行的命令、测试数据库准备与环境变量；E2E、性能和真实模型评测沿用第 14 篇。默认测试禁止外部模型调用，真实数据库或浏览器环境缺失不能伪装成通过。本次交付验收仅针对本文目录、职责和依赖边界的完整性。

@@ -34,7 +34,7 @@ packages = ["src/backend"]
 "assets/cases/case_001/v1/slice.json" = "backend/case_data/case_001/v1/slice.json"
 
 [tool.pytest.ini_options]
-testpaths = ["tests/backend"]
+testpaths = ["tests"]
 # The host may export ROS plugins through PYTHONPATH. Enable needed plugins explicitly.
 addopts = ["--disable-plugin-autoload", "--strict-markers", "-m", "not live_llm and not performance"]
 markers = [

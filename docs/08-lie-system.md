@@ -769,4 +769,4 @@ async def present_evidence(command, visitor, services):
 
 语义指标按预先定义的标注标准人工复核，区分“引用玩家猜测”与“NPC 确认猜测”。记录样本量和不确定性，不用关键词命中率或“状态越权为零”推导文本泄密为零。当前文档不提供尚未实测的成功率。
 
-实现起步复用 `src/backend/domain/rules.py` 的层级判定、Evidence Engine 的披露与既有 NPCContextBuilder；公共行为检查放 `tests/backend/domain/test_lie_system.py`，事务检查再接入选定数据库。先完成本例的固定回复闭环，再加入受限表达与评测；不增加自主 Agent 协商、向量检索或通用剧情语言。
+实现起步复用 `backend/src/backend/domain/rules.py` 的层级判定、Evidence Engine 的披露与既有 NPCContextBuilder；公共行为检查放 `backend/tests/domain/test_lie_system.py`，事务检查再接入选定数据库。先完成本例的固定回复闭环，再加入受限表达与评测；不增加自主 Agent 协商、向量检索或通用剧情语言。

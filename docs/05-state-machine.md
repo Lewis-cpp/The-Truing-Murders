@@ -330,7 +330,7 @@ Host 可以说明“现在可以出示持有的证据”“你可以继续调查
 
 ### 6.1 最小落地方式
 
-使用标准库 `Enum`、`dataclass`、`frozenset`、普通映射和纯函数即可。沿用已有架构的 `src/backend/domain/`，先把枚举、动作允许表和转换函数放在 `state_machine.py`，证据、数值和谎言逻辑放在已有职责的 `rules.py`；应用层负责事务。无需第三方状态机库、通用工作流框架或每个状态一个类。
+使用标准库 `Enum`、`dataclass`、`frozenset`、普通映射和纯函数即可。沿用已有架构的 `backend/src/backend/domain/`，先把枚举、动作允许表和转换函数放在 `state_machine.py`，证据、数值和谎言逻辑放在已有职责的 `rules.py`；应用层负责事务。无需第三方状态机库、通用工作流框架或每个状态一个类。
 
 权威会话只需在原领域字段上补充 `active_npc_id` 和 `deep_unlock_event_id`。前者仅在 `INTERROGATION` 非空；后者单向从空变为事件引用。返回调查的目标从里程碑派生，无需维护容易失效的 `previous_phase`。NPC 的情绪和六态展示值不单独写入数据库。
 
@@ -522,7 +522,7 @@ Game Engine 用已有 SQLAlchemy 事务和数据库行锁提交，不增加内�
 
 ### 7.2 实现时的最小验收集合
 
-文档中的 `demo()` 只检查转换边与派生示例，不代表完成后端或案件验收。实现阶段在 `tests/backend/domain/test_state_machine.py` 起步，纯函数检查使用标准库 `unittest`；事务行为再接入选定数据库验证。
+文档中的 `demo()` 只检查转换边与派生示例，不代表完成后端或案件验收。实现阶段在 `backend/tests/domain/test_state_machine.py` 起步，纯函数检查使用标准库 `unittest`；事务行为再接入选定数据库验证。
 
 | 检查 | 关键输入 | 必须得到的结果 |
 | --- | --- | --- |

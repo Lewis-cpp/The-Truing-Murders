@@ -232,7 +232,7 @@ NPC 在开放生成中说了“我承认”，但没有对应规则提交，不�
 
 ### 8.1 边界与输入
 
-MemoryService 继续是 `src/backend/application/memory.py` 中的普通模块，无数据库连接、无规则执行权、无自主模型循环。`NPCContextBuilder` 的职责直接归入 `build_context()`，不保留两套构建流程。
+MemoryService 继续是 `backend/src/backend/application/memory.py` 中的普通模块，无数据库连接、无规则执行权、无自主模型循环。`NPCContextBuilder` 的职责直接归入 `build_context()`，不保留两套构建流程。
 
 | 方法 | 输入 | 输出 | 调用时机 |
 | --- | --- | --- | --- |
