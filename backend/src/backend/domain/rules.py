@@ -13,16 +13,19 @@ from backend.domain.models import (
 )
 from backend.domain.state_machine import guard
 
+# Semantics of these functions; stored with each event and verdict to detect incompatible saves.
+RULE_EXECUTION_VERSION = "w1-slice-1"
+
 
 def investigate(case: Case, state: GameState, action_id: str) -> GameState:
     guard(state, "inspect")
     action = next((a for a in case.scene.actions if a.id == action_id), None)
     if action is None:
-        raise GameError("调查点不存在，请查看当前场景。")
+        raise GameError("调查点不存在，请查看当前场景。", "INVALID_ACTION_REFERENCE")
     if action.id in state.completed_actions:
         return state
     if not action.requires.satisfied(state.evidence_ids):
-        raise GameError("核对条件尚不齐全。请检查其他调查点，再回来重试。")
+        raise GameError("核对条件尚不齐全。请检查其他调查点，再回来重试。", "ACTION_UNAVAILABLE")
     return replace(
         state,
         evidence_ids=state.evidence_ids | {action.evidence_id},
@@ -33,7 +36,7 @@ def investigate(case: Case, state: GameState, action_id: str) -> GameState:
 def present(case: Case, state: GameState, npc_id: str, evidence_id: str) -> GameState:
     guard(state, "present")
     if npc_id != case.npc.id or state.active_npc_id != npc_id:
-        raise GameError("只能向当前审讯的角色出示证据。")
+        raise GameError("只能向当前审讯的角色出示证据。", "ACTIVE_NPC_MISMATCH")
     require_held(state, evidence_id)
     evidence = next(e for e in case.evidence if e.id == evidence_id)
     npc = replace(state.npc, presented=state.npc.presented | {evidence_id})

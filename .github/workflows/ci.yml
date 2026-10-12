@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-rules:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          version: '0.12.23'
+      - run: uv sync --locked --python 3.12
+      - run: uv run --offline ruff format --check src tests
+      - run: uv run --offline ruff check src tests
+      - run: uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
+
+  database:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        # Same image digest as backend/compose.yaml.
+        image: postgres:18-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+        env:
+          POSTGRES_USER: truing
+          POSTGRES_PASSWORD: truing_local
+          POSTGRES_DB: truing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U truing -d truing_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgresql+psycopg://truing:truing_local@127.0.0.1:5432/truing
+      TEST_DATABASE_URL: postgresql+psycopg://truing:truing_local@127.0.0.1:5432/truing_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+          version: '0.12.23'
+      - run: uv sync --locked --python 3.12
+      # Migrations, constraints, rollback, idempotency, API and concurrency on real PostgreSQL 18.
+      - run: uv run --offline pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

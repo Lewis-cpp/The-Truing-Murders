@@ -4,7 +4,8 @@ from sqlalchemy import create_engine, pool
 from backend.config import Settings
 from backend.infrastructure.database.models import Base
 
-database_url = str(Settings().database_url)
+# Tests and tools may pass an explicit URL; normal runs read DATABASE_URL.
+database_url = context.config.attributes.get("database_url") or str(Settings().database_url)
 
 if context.is_offline_mode():
     context.configure(

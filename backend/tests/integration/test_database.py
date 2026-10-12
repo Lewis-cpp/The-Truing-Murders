@@ -28,3 +28,13 @@ def test_migration_environment_connects_to_test_database(monkeypatch, database_u
     monkeypatch.setenv("DATABASE_URL", database_url)
     command.upgrade(Config(str(PROJECT_ROOT / "alembic.ini")), "head")
     assert inspect(engine).has_table("alembic_version")
+
+
+def test_migrations_match_models_and_downgrade_cleanly(migrated_url):
+    from conftest import alembic_config
+
+    config = alembic_config(migrated_url)
+    command.check(config)  # raises if models and migrations differ
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+    command.check(config)
