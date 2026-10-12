@@ -5,16 +5,20 @@
 
 ## 当前状态
 
-W1 已提供《停电之夜》的离线命令行切片：1 场景、1 NPC、3 条证据、
-1 条单层谎言、结构化指控、三类判定与固定复盘。所有规则和对白均为固定内容，
-没有 Agent、模型 SDK、模型调用或游戏数据库依赖。进度仅在内存，退出即丢失。
+v0.2 把《停电之夜》切片变成了可保存的网页游戏：浏览器开局 → 调查取证 → 审讯并出示证据 →
+刷新或重启后端后继续 → 正式指控 → 固定复盘。所有规则和对白仍是固定内容，
+没有 Agent、模型 SDK 或模型调用。进度保存在 PostgreSQL，每次操作在一个事务内提交，
+数据库失败时页面不会显示保存成功。重开会创建独立的新局，旧局保留为只读。
+交付范围与限制见 [v0.2 交付记录](docs/18-v0.2-delivery.md)。
+
+W1 的离线命令行切片继续保留：1 场景、1 NPC、3 条证据、1 条单层谎言、结构化指控、
+三类判定与固定复盘，进度只在内存，不需要数据库。
 
 同案的 [完整案件草稿](backend/assets/cases/case_001/v1/full-case-draft.md) 已列出真相、知识权限、
 4 NPC／4 场景／12 条证据／3 条谎言链与评分；全案尚未实现，细节待人工审阅。
 可执行配置为 [W1 案件切片](backend/assets/cases/case_001/v1/slice.json)。
 
-已有基础工程继续保留：Vue 检查页 → Vite 同源代理 → FastAPI → PostgreSQL 18。
-网页目前仍是环境检查页；游戏 API、持久化和网页玩法属于后续阶段。
+网页链路：Vue 页面 → Vite 同源代理 → FastAPI `/api/v1` → PostgreSQL 18。
 
 仓库分为两个独立子项目：`backend/`（Python、FastAPI、数据库）和 `frontend/`（Vue、Vite）。
 各自带依赖、锁文件和命令，以下命令均在对应子目录内执行。项目按一人独立开发安排，
@@ -73,8 +77,9 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 非法动作、结案冻结和实际终端交互。CLI 交互测试禁止套接字连接。
 这些预期尚待真人复核，不冒充人工验收结果。
 
-`.github/workflows/week-one.yml` 分两个任务：后端安装锁定依赖后运行 Ruff 和上述离线检查，
-前端运行格式、类型、lint、测试和构建；不配置数据库服务，不使用模型密钥。完整基础工程检查见下文。
+`.github/workflows/ci.yml` 分三个任务：后端离线任务运行 Ruff 和上述离线检查；
+数据库任务启动与 `compose.yaml` 同一摘要的 PostgreSQL 18 服务，运行完整 pytest；
+前端运行格式、类型、lint、测试和构建。CI 不使用模型密钥。
 交付范围与验证记录见 [W1 交付记录](docs/17-week-one-delivery.md)。
 
 ## 开发环境
@@ -112,10 +117,15 @@ cp .env.example .env
 uv sync --locked
 docker compose up -d --wait
 uv run alembic upgrade head
+uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
 
 cd ../frontend
 npm ci
 ```
+
+`import_case` 是离线发布步骤：校验案件文件，写入静态定义表，确认数据库能还原出同一份定义后发布。
+同一版本重复导入内容一致时不做修改；已发布版本内容不同会被拒绝，修订必须换版本号。
+后端启动时不会自动导入案件。
 
 `backend/.env.example` 中是仅限本机开发的示例数据库账号，不含模型密钥。
 数据库端口只绑定 `127.0.0.1`，开发账号具有数据库管理权限；正式部署需要单独配置运行与维护权限。
@@ -139,12 +149,14 @@ cd frontend
 npm run dev
 ```
 
-- 开发检查页：[http://127.0.0.1:5173](http://127.0.0.1:5173)。
+- 游戏页面：[http://127.0.0.1:5173](http://127.0.0.1:5173)。
 - API 文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)。
 - `GET /api/v1/health`：进程存活检查，不依赖数据库。
 - `GET /api/v1/ready`：真实执行数据库查询，成功返回 200，连接失败返回 503。
 
-前端通过 `/api` 代理访问本机 8000 端口，无需配置跨域通配符。
+前端通过 `/api/v1` 代理访问本机 8000 端口，无需配置跨域通配符。
+后端用 HttpOnly 匿名 Cookie 识别访问者，写请求校验 `Origin`（默认允许 5173 和 4173 端口的
+`127.0.0.1` 与 `localhost`，可用 `ALLOWED_ORIGINS` 环境变量覆盖）。
 前端静态资源仅来自 `frontend/public/`，案件和提示词只在 `backend/assets/`，不对外提供。
 当前所有服务均只绑定本机地址，适用于本机开发。
 
@@ -177,10 +189,12 @@ npm test
 npm run build
 ```
 
-后端检查验证真实 PostgreSQL 18、JSONB、事务回滚、迁移入口与健康接口；
-前端检查验证成功、连接失败与重试提示。数据库缺失时集成检查直接失败，不跳过。
-测试通过 `TEST_DATABASE_URL` 使用独立库，要求数据库名以 `_test` 结尾，且不能与开发库相同。
-目前只创建临时探测表和 Alembic 版本表，没有游戏业务数据。
+后端检查在真实 PostgreSQL 18 上验证：迁移可升级、可回退且与模型一致；复合外键、唯一效果和唯一结案；
+写入证据后注入故障整体回滚；同键重发、同键异载荷、跨访客访问、过期版本和并发提交；
+API 完整通关并在重启后续玩。前端检查验证写请求协议、断线后查询原请求、
+保存失败不显示成功以及用同一键重试。数据库缺失时集成检查直接失败，不跳过。
+测试通过 `TEST_DATABASE_URL` 使用独立库，要求数据库名以 `_test` 结尾，且不能与开发库相同；
+测试会重建该库的表结构。
 
 pytest 禁止自动加载宿主机插件，避免本机 ROS 的 `PYTHONPATH` 干扰；
 未来引入异步或浏览器插件时需显式通过 `-p` 启用。
@@ -204,8 +218,9 @@ npm run format
 
 Alembic 已连接 `DATABASE_URL`，模型统一从
 `backend/src/backend/infrastructure/database/models/__init__.py` 的 `Base.metadata` 注册。
-当前没有业务表或迁移版本；`upgrade head` 仅验证迁移入口，并初始化版本表。
-添加 ORM 模型并在该模块导入后，可在 `backend/` 内生成和执行迁移：
+首个迁移 `0001` 只建切片用到的 15 张表：案件版本、人物、私有知识、场景、证据与前置依赖、谎言层，
+以及访问者、游戏会话、已持有证据、NPC 状态、幂等请求、事件日志、一次性效果和正式指控。
+对话、模型调用、关系图和时间线的表随后续版本加入。修改模型后，可在 `backend/` 内生成和执行迁移：
 
 ```bash
 uv run alembic revision --autogenerate -m "Add case tables"

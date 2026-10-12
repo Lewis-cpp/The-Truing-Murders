@@ -10,7 +10,8 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    proxy: { '/api': 'http://127.0.0.1:8000' },
+    // Only the versioned API; src/api/*.ts modules share the /api prefix in dev.
+    proxy: { '/api/v1': 'http://127.0.0.1:8000' },
     fs: {
       allow: ['src', 'public', 'node_modules'],
     },
