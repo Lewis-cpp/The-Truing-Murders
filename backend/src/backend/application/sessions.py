@@ -204,7 +204,9 @@ class GameService:
                 "request_id": str(request.request_id),
                 "status": request.status,
                 "original_http_status": request.http_status,
-                "result": None if rejected else request.result_json,
+                "result": None
+                if rejected
+                else {k: v for k, v in request.result_json.items() if k != "_location"},
                 "error": request.result_json.get("error") if rejected else None,
             }
 
