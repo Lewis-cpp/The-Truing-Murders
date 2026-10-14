@@ -4,7 +4,7 @@ import uuid
 import pytest
 from conftest import ORIGIN
 from fastapi.testclient import TestClient
-from player import CORRECT, Player
+from player import CASE_VERSION, CORRECT, Player
 
 pytestmark = [pytest.mark.api, pytest.mark.integration]
 
@@ -179,6 +179,9 @@ def test_initial_and_rejected_responses_hide_secrets(client):
             "admission_pressure_min",
             "pressure",
             "B17实验原始记录",  # unheld evidence content
+            "B17的原件",  # testimony recorded only when asked
+            "我是猜的",  # contradiction reply
+            "核对封存卷宗后",  # contradiction explanation
         ):
             assert marker not in text
 
@@ -188,7 +191,7 @@ def test_restart_creates_an_independent_game_and_freezes_the_old_entry(client):
     player.start()
     player.investigate("A01")
     old_id, old_version = player.session_id, player.version
-    body = {"case_id": "case_001", "case_version": "1-slice"}
+    body = {"case_id": "case_001", "case_version": CASE_VERSION}
     exists = player.write("POST", "/api/v1/sessions", body, version=None)
     assert (exists.status_code, error_code(exists)) == (409, "CURRENT_SESSION_EXISTS")
     restart = {**body, "replaces_session_id": old_id}

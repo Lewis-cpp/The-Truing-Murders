@@ -43,6 +43,19 @@ def write_case(tmp_path, raw):
         lambda c: c["scoring"]["criteria"][4].update({"evidence_ids": []}),
         lambda c: c["scoring"]["criteria"][4].update({"step_id": "UNKNOWN"}),
         lambda c: c["evidence"][0].update({"credibility": "UNVERIFIED"}),
+        lambda c: c["knowledge"][2].update({"disclosure": "OVERHEARD"}),
+        lambda c: c["interrogation"].update({"irrelevant_trust": 5}),
+        lambda c: c["interrogation"].update({"evade_after": 0}),
+        lambda c: c["interrogation"].update({"topics": []}),
+        lambda c: c["interrogation"]["topics"][0].update({"knowledge_id": "UNKNOWN"}),
+        lambda c: c["interrogation"]["topics"][0].update({"knowledge_id": "K02"}),
+        lambda c: c["interrogation"]["topics"][0].update({"npc_id": "NPC02"}),
+        lambda c: c["interrogation"]["contradictions"][0].update({"knowledge_id": "K01"}),
+        lambda c: c["interrogation"]["contradictions"][0].update({"evidence_id": "UNKNOWN"}),
+        lambda c: c["interrogation"]["contradictions"][0].update({"pressure": -15}),
+        lambda c: c["interrogation"]["contradictions"].append(
+            {**c["interrogation"]["contradictions"][0], "id": "C02"}
+        ),
     ],
 )
 def test_bad_case_is_rejected_at_load(tmp_path, raw, mutation):
@@ -74,8 +87,28 @@ def test_empty_dependencies_mean_no_prerequisites():
 
 def test_loading_is_independent_of_cwd_and_rejects_non_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert load_case().version == "1-slice"
+    assert load_case().version == "2-slice"
     invalid = tmp_path / "broken.json"
     invalid.write_text("{broken")
     with pytest.raises(ValueError, match="结构校验失败"):
         load_case(invalid)
+
+
+def test_costs_that_could_block_the_admission_are_rejected(tmp_path, raw):
+    # A trust path of 30 survives the initial values but not every cost paid first.
+    raw["lie"].update({"admission_pressure_min": None, "admission_trust_min": 30})
+    with pytest.raises(ValueError, match="代价"):
+        load_case(write_case(tmp_path, raw))
+    raw["interrogation"]["irrelevant_trust"] = 0
+    assert load_case(write_case(tmp_path, raw)).lie.admission_trust_min == 30
+
+
+def test_contradiction_needs_verified_evidence(tmp_path, raw):
+    contradiction = raw["interrogation"]["contradictions"][0]
+    contradiction["evidence_id"] = "E02"
+    assert load_case(write_case(tmp_path, raw)).interrogation.contradictions[0].evidence_id == "E02"
+    raw["evidence"][1]["credibility"] = "UNVERIFIED"
+    raw["scoring"]["criteria"][5]["evidence_ids"] = ["E01"]
+    raw["scoring"]["criteria"][5]["step_id"] = "P_ENTER"
+    with pytest.raises(ValueError, match="矛盾所依据"):
+        load_case(write_case(tmp_path, raw))

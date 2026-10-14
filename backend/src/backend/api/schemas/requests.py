@@ -36,9 +36,18 @@ class ChatRequest(Request):
     message: Annotated[str, StringConstraints(min_length=1, max_length=2000, pattern=r"\S")]
 
 
+class AskTopicRequest(Request):
+    topic_id: LocalId
+
+
 class PresentEvidenceRequest(Request):
     evidence_id: LocalId
     comment: Annotated[str, Field(max_length=1000)] = ""
+
+
+class PointContradictionRequest(Request):
+    knowledge_id: LocalId
+    evidence_id: LocalId
 
 
 class StepEvidenceLink(Request):

@@ -11,14 +11,17 @@ from backend.application.game import Game
 from backend.domain.models import Accusation, GameError, Phase, StepEvidenceLink
 from backend.domain.state_machine import emotion, guard
 
-HELP = """命令（编号可在 look / bag / accuse 中查看）：
+HELP = """命令（编号可在 look / bag / topics / accuse 中查看）：
   look              查看场景、调查点与可审讯角色
   inspect A01       调查指定位置；可以自主选择顺序
-  bag               查看已获得证据和已公开证词
+  bag               查看已获得证据和已记录的证词
   talk NPC01        进入沈砚的审讯
   ask 你的问题      获取当前固定说法；文字不产生数值收益
-  present E01       向当前角色明确出示已持有证据
-  back              结束审讯，或取消指控返回调查
+  topics            列出审讯中可以追问的话题
+  topic Q01         追问话题；回答记入证词，不经核验
+  present E01       向当前角色明确出示已持有证据；无关材料会让他戒备
+  contradict K03 E03  指出证词与证据的矛盾；指错同样算无关操作
+  back              结束审讯，或取消指控返回调查；回避的角色下次重新开口
   accuse            进入指控并查看所有候选项
   submit            逐项填写指控，确认后冻结本局
   review            结案后查看判定与真相
@@ -127,15 +130,26 @@ def run(
                     )
                 for knowledge in view["knowledge"]:
                     write(
-                        f"证词 [{knowledge['credibility']}] {knowledge['source']}："
-                        f"{knowledge['content']}"
+                        f"证词 {knowledge['id']} [{knowledge['credibility']}] "
+                        f"{knowledge['source']}：{knowledge['content']}"
                     )
             elif command == "talk":
                 write(game.talk(argument))
             elif command == "ask":
                 write(game.ask(argument))
+            elif command == "topics":
+                for topic in game.view()["topics"]:
+                    asked = "已问" if topic["asked"] else "未问"
+                    write(f"{topic['id']} · {topic['label']}（{asked}）")
+            elif command == "topic":
+                write(game.topic(argument))
             elif command == "present":
                 write(game.present(game.state.active_npc_id or "", argument))
+            elif command == "contradict":
+                knowledge_id, _, evidence_id = argument.partition(" ")
+                if not knowledge_id or not evidence_id.strip():
+                    raise GameError("格式应为 contradict 证词编号 证据编号。")
+                write(game.contradict(knowledge_id, evidence_id.strip()))
             elif command == "back":
                 game.back()
                 write("已返回调查。")
@@ -153,9 +167,9 @@ def run(
             elif command == "status":
                 write(f"阶段：{game.state.phase.value}；证据：{len(game.state.evidence_ids)}/3。")
                 if game.state.phase == Phase.INTERROGATION:
-                    write(
-                        f"当前情绪：{emotion(game.state.npc)}；说法阶段：{game.state.npc.lie_stage.value}。"
-                    )
+                    npc = game.state.npc
+                    mood = "回避中" if game.evading else emotion(npc)
+                    write(f"当前情绪：{mood}；说法阶段：{npc.lie_stage.value}。")
             elif command:
                 write("无法识别该命令。输入 help 查看操作。")
         except (EOFError, KeyboardInterrupt):

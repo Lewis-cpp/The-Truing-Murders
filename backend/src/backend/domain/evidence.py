@@ -1,4 +1,5 @@
-from backend.domain.models import Accusation, Case, GameError, GameState, LieStage, Phase
+from backend.domain.models import Accusation, Case, GameError, GameState, NPCState, Phase
+from backend.domain.state_machine import evading
 
 
 def require_held(state: GameState, evidence_id: str) -> None:
@@ -42,9 +43,13 @@ def player_view(case: Case, state: GameState) -> dict:
         "npc": {"id": case.npc.id, "name": case.npc.name, "role": case.npc.role},
         "evidence": [e.model_dump() for e in case.evidence if e.id in state.evidence_ids],
         "knowledge": [
-            {"content": k.content, "credibility": "UNVERIFIED", "source": case.npc.name}
+            {"id": k.id, "content": k.content, "credibility": "UNVERIFIED", "source": case.npc.name}
             for k in case.knowledge
             if k.disclosure == "PUBLIC" or k.id in state.disclosed_knowledge
+        ],
+        "topics": [
+            {"id": t.id, "label": t.label, "asked": t.knowledge_id in state.disclosed_knowledge}
+            for t in case.interrogation.topics
         ],
         "choices": {
             name: [choice.model_dump() for choice in getattr(case, name)]
@@ -56,15 +61,18 @@ def player_view(case: Case, state: GameState) -> dict:
     return result
 
 
+def current_statement(case: Case, npc: NPCState) -> str:
+    """What the NPC says now: the evasion line while evading, else the lie stage's statement."""
+    if evading(case, npc):
+        return case.interrogation.evade_reply
+    return getattr(case.lie.statements, npc.lie_stage.value.lower())
+
+
 def npc_view(case: Case, state: GameState, npc_id: str) -> dict:
     """Fixed dialogue projection only; no Agent or model context is created."""
     if npc_id != case.npc.id or state.active_npc_id != npc_id:
         raise GameError("请先进入该角色的审讯。", "ACTIVE_NPC_MISMATCH")
-    statement = {
-        LieStage.UNBROKEN: case.lie.statements.unbroken,
-        LieStage.BROKEN: case.lie.statements.broken,
-        LieStage.ADMITTED: case.lie.statements.admitted,
-    }[state.npc.lie_stage]
+    statement = current_statement(case, state.npc)
     return {
         "name": case.npc.name,
         "statement": statement,

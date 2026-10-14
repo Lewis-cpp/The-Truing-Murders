@@ -78,7 +78,7 @@ def test_mistyped_input_and_cancelled_submission_can_be_corrected():
             "NPC02",
             "W02",
             "M02",
-            "P_POISON",
+            "P_CUT_POWER",
             "",
             "",
             "",
@@ -87,7 +87,7 @@ def test_mistyped_input_and_cancelled_submission_can_be_corrected():
             "NPC02",
             "W02",
             "M02",
-            "P_POISON",
+            "P_CUT_POWER",
             "",
             "",
             "",
@@ -99,6 +99,41 @@ def test_mistyped_input_and_cancelled_submission_can_be_corrected():
     assert "关联格式" in output
     assert "已取消提交" in output
     assert "结案：错误 · 0/100" in output
+
+
+def test_topics_contradictions_and_evasion_are_playable_in_the_terminal():
+    game = Game(load_case())
+    output = script(
+        game,
+        [
+            "inspect A01",
+            "inspect A02",
+            "inspect A03",
+            "talk NPC01",
+            "topics",
+            "topic Q01",
+            "bag",
+            "contradict K03",
+            "contradict K03 E03",
+            "present E02",
+            "present E02",
+            "status",
+            "present E01",
+            "back",
+            "talk NPC01",
+            "present E01",
+            "present E03",
+            "quit",
+        ],
+    )
+    assert "Q01 · 档案室丢了什么？（未问）" in output
+    assert "证词 K03 [UNVERIFIED]" in output
+    assert "格式应为" in output
+    assert "矛盾成立" in output
+    assert "沈砚对你更戒备了" in output
+    assert "当前情绪：回避中" in output
+    assert "沈砚在回避" in output
+    assert game.state.npc.lie_stage == LieStage.ADMITTED
 
 
 def test_eof_during_submission_exits_without_partial_verdict():

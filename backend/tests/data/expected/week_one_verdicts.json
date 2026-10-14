@@ -59,7 +59,7 @@
       "culprit": "NPC01",
       "weapon": "W02",
       "motive": "M02",
-      "steps": ["P_POISON"],
+      "steps": ["P_SEARCH_FIRST"],
       "cited_evidence_ids": [],
       "evidence_links": []
     },
@@ -74,7 +74,7 @@
       "culprit": "NPC02",
       "weapon": "W02",
       "motive": "M02",
-      "steps": ["P_POISON"],
+      "steps": ["P_CUT_POWER"],
       "cited_evidence_ids": [],
       "evidence_links": []
     },

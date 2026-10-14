@@ -3,6 +3,7 @@ import uuid
 
 import pytest
 
+from backend.application.case import load_case
 from backend.application.sessions import Command, GameService
 
 pytestmark = pytest.mark.integration
@@ -31,7 +32,7 @@ def started(db):
         visitor,
         Command(uuid.uuid4(), "POST", "/api/v1/sessions", {}),
         "case_001",
-        "1-slice",
+        load_case().version,
         None,
         False,
     )

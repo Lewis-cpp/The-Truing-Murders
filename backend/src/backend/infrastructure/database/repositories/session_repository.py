@@ -192,6 +192,7 @@ class SessionRepository:
                 character_id=case.npc.id,
                 pressure=case.npc.initial_pressure,
                 trust=case.npc.initial_trust,
+                irrelevant_streak=0,
                 lies_json={case.lie.id: self._lie_progress(LieStage.UNBROKEN, [], None, None)},
                 updated_at=now,
             )
@@ -244,6 +245,7 @@ class SessionRepository:
                 trust=npc_row.trust,
                 lie_stage=LieStage(progress["stage"]),
                 presented=presented,
+                irrelevant_streak=npc_row.irrelevant_streak,
             ),
             phase=phase,
             active_npc_id=row.active_npc_id,
@@ -311,6 +313,7 @@ class SessionRepository:
             verified = {e.id for e in case.evidence if e.credibility == "VERIFIED"}
             npc_row.pressure = after.npc.pressure
             npc_row.trust = after.npc.trust
+            npc_row.irrelevant_streak = after.npc.irrelevant_streak
             npc_row.lies_json = {
                 case.lie.id: self._lie_progress(
                     stage,

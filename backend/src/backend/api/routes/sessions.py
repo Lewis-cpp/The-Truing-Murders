@@ -128,6 +128,25 @@ def chat(
 
 
 @router.post(
+    "/sessions/{session_id}/npcs/{npc_id}/questions",
+    response_model=rs.ActionResult[rs.QuestionResult],
+    status_code=201,
+    **WRITE,
+)
+def ask_topic(
+    session_id: UUID,
+    npc_id: str,
+    body: rq.AskTopicRequest,
+    visitor: Visitor,
+    game: Game,
+    commands: Commands,
+) -> JSONResponse:
+    command = commands(body.model_dump(mode="json"))
+    result = game.ask_topic(visitor, session_id, command, npc_id, body.topic_id)
+    return respond(result, rs.ActionResult[rs.QuestionResult])
+
+
+@router.post(
     "/sessions/{session_id}/npcs/{npc_id}/evidence-presentations",
     response_model=rs.ActionResult[rs.PresentationResult],
     status_code=201,
@@ -144,6 +163,27 @@ def present_evidence(
     command = commands(body.model_dump(mode="json"))
     result = game.present(visitor, session_id, command, npc_id, body.evidence_id)
     return respond(result, rs.ActionResult[rs.PresentationResult])
+
+
+@router.post(
+    "/sessions/{session_id}/npcs/{npc_id}/contradictions",
+    response_model=rs.ActionResult[rs.ContradictionResult],
+    status_code=201,
+    **WRITE,
+)
+def point_contradiction(
+    session_id: UUID,
+    npc_id: str,
+    body: rq.PointContradictionRequest,
+    visitor: Visitor,
+    game: Game,
+    commands: Commands,
+) -> JSONResponse:
+    command = commands(body.model_dump(mode="json"))
+    result = game.point_contradiction(
+        visitor, session_id, command, npc_id, body.knowledge_id, body.evidence_id
+    )
+    return respond(result, rs.ActionResult[rs.ContradictionResult])
 
 
 @router.put(
