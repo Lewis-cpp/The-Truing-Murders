@@ -17,6 +17,11 @@ class CaseIntegrityError(RuntimeError):
     """A stored definition no longer matches its published identity."""
 
 
+def is_supported(template: CaseTemplate) -> bool:
+    """Whether this server can run the version; older ones stay stored but are not offered."""
+    return template.rule_execution_version == RULE_EXECUTION_VERSION
+
+
 @dataclass(frozen=True)
 class ImportResult:
     template_id: str
@@ -63,9 +68,7 @@ class CaseCatalog:
     def load(self, db: Session, template: CaseTemplate) -> Case:
         key = (template.template_id, template.content_hash)
         if key not in self._cache:
-            if template.status == "DRAFT" or template.rule_execution_version != (
-                RULE_EXECUTION_VERSION
-            ):
+            if template.status == "DRAFT" or not is_supported(template):
                 raise CaseIntegrityError("案件版本未发布或规则执行版本不受支持。")
             case = CaseRepository(db).load_case(template)
             validate_case(case)

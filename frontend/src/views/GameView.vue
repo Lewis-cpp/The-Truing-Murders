@@ -68,6 +68,15 @@ onMounted(game.init)
         </ElButton>
       </ElAlert>
     </div>
+    <div v-if="game.unsupported" class="feedback">
+      <ElAlert
+        type="warning"
+        title="当前版本暂时无法读取此存档"
+        description="存档已保留，不会被自动重置。可以在下方开始新的一局，或联系维护者升级后再继续。"
+        :closable="false"
+        show-icon
+      />
+    </div>
     <div class="feedback" role="status" aria-live="polite">
       <ElAlert
         v-if="game.notice"

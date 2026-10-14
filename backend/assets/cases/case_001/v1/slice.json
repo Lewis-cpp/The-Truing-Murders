@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "scope": "week_one_slice",
   "case_id": "case_001",
-  "version": "1-slice",
-  "rules_version": "w1-1",
+  "version": "2-slice",
+  "rules_version": "w1-2",
   "title": "停电之夜",
   "introduction": "澄明研究所，案发当晚。21:25，负责人陆衡被发现死在档案室。走廊曾短暂停电，档案柜敞开。四名相关人员仍在所内。你受托核对现场记录，查明凶手、凶器、动机与作案经过。第一周仅开放档案室与副研究员沈砚；其余三人可以作为指控候选。",
   "review_status": "pending_human_review",
@@ -52,15 +52,15 @@
   ],
   "motives": [
     { "id": "M01", "label": "阻止实验造假被移交审计" },
-    { "id": "M02", "label": "争夺遗产" },
-    { "id": "M03", "label": "报复值班处分" }
+    { "id": "M02", "label": "掩盖私借B17副本被发现" },
+    { "id": "M03", "label": "掩盖违规检修造成的事故" }
   ],
   "process_steps": [
-    { "id": "P_ENTER", "label": "停电期间进入档案室" },
     { "id": "P_ATTACK", "label": "用铜镇纸袭击陆衡" },
+    { "id": "P_CUT_POWER", "label": "故意切断电源制造黑暗" },
     { "id": "P_STAGE", "label": "取走原始记录并翻乱档案柜伪装失窃" },
-    { "id": "P_POISON", "label": "先在饮水中投毒" },
-    { "id": "P_LEAVE", "label": "离开研究所后遥控行凶" }
+    { "id": "P_ENTER", "label": "停电期间进入档案室" },
+    { "id": "P_SEARCH_FIRST", "label": "先翻柜找记录，被陆衡撞见后行凶" }
   ],
   "evidence": [
     {
@@ -80,7 +80,7 @@
     {
       "id": "E03",
       "title": "审计移交联与翻柜痕迹",
-      "content": "按门禁时段与物证编号核对后，卷宗显示：陆衡20:55签署移交单，次日上午将提交沈砚负责的B17实验原始记录，追查数据造假。柜中只缺B17原件，现金和其他卷宗未动；抽屉内侧及B17纸套上的同源血迹说明翻找发生在陆衡受伤之后。封存的移交联副本未被取走。",
+      "content": "按门禁时段与物证编号核对后，卷宗显示：陆衡20:55签署移交单，次日上午将提交沈砚负责的B17实验原始记录，追查数据造假。柜中只缺B17原件，现金和其他卷宗未动；这份缺失清单是本次核对才确定的，此前没有对外公布。抽屉内侧及B17纸套上的同源血迹说明翻找发生在陆衡受伤之后。封存的移交联副本未被取走。",
       "source": "封存卷宗、签名移交联副本和现场痕迹核对单",
       "credibility": "VERIFIED"
     }
@@ -97,6 +97,12 @@
       "content": "沈砚承认21:10至21:16进入过档案室；此条只记录到场证词，不是杀人招供。",
       "known_by": ["NPC01"],
       "disclosure": "ADMITTED"
+    },
+    {
+      "id": "K03",
+      "content": "沈砚断言档案室丢的是B17原件：“柜子翻成那样，B17的原件肯定是被偷了。”此条只记录他的说法。",
+      "known_by": ["NPC01"],
+      "disclosure": "ASKED"
     }
   ],
   "lie": {
@@ -115,6 +121,33 @@
     "effects": [
       { "evidence_id": "E01", "pressure": 25, "trust": -5 },
       { "evidence_id": "E03", "pressure": 25, "trust": 0 }
+    ]
+  },
+  "interrogation": {
+    "irrelevant_trust": -5,
+    "evade_after": 2,
+    "irrelevant_reply": "你到底想说什么？这和我有什么关系？",
+    "evade_reply": "你一直拿不相干的东西来问我。我现在不想再谈了。",
+    "topics": [
+      {
+        "id": "Q01",
+        "npc_id": "NPC01",
+        "label": "档案室丢了什么？",
+        "reply": "柜子翻成那样，B17的原件肯定是被偷了。",
+        "knowledge_id": "K03"
+      }
+    ],
+    "contradictions": [
+      {
+        "id": "C01",
+        "npc_id": "NPC01",
+        "knowledge_id": "K03",
+        "evidence_id": "E03",
+        "pressure": 15,
+        "trust": 0,
+        "reply": "……我是猜的。柜子都被翻开了，丢的总归是要紧的东西。",
+        "explanation": "缺失清单是核对封存卷宗后才确定的，此前没有对外公布；沈砚却已经说出丢的是B17原件。"
+      }
     ]
   },
   "truth": {

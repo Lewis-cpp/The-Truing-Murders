@@ -4,6 +4,10 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from backend.application.case import load_case
+
+CASE_VERSION = load_case().version
+
 CORRECT = {
     "suspect_character_id": "NPC01",
     "weapon_option_id": "W01",
@@ -44,7 +48,7 @@ class Player:
         response = self.write(
             "POST",
             "/api/v1/sessions",
-            {"case_id": "case_001", "case_version": "1-slice"},
+            {"case_id": "case_001", "case_version": CASE_VERSION},
             version=None,
         )
         assert response.status_code == 201, response.text
@@ -68,6 +72,22 @@ class Player:
             {"evidence_id": evidence_id},
             **kwargs,
         )
+
+    def ask_topic(self, topic_id: str, npc_id="NPC01", **kwargs):
+        return self.write(
+            "POST", self.path(f"/npcs/{npc_id}/questions"), {"topic_id": topic_id}, **kwargs
+        )
+
+    def contradict(self, knowledge_id: str, evidence_id: str, npc_id="NPC01", **kwargs):
+        return self.write(
+            "POST",
+            self.path(f"/npcs/{npc_id}/contradictions"),
+            {"knowledge_id": knowledge_id, "evidence_id": evidence_id},
+            **kwargs,
+        )
+
+    def leave(self, **kwargs):
+        return self.write("DELETE", self.path("/interrogation"), **kwargs)
 
     def accuse(self, **kwargs):
         return self.write("PUT", self.path("/accusation-preparation"), {}, **kwargs)

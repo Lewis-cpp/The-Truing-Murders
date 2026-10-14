@@ -116,7 +116,7 @@ player_evidence:
 | `scoring_policy_json` | jsonb | 否 | 评分项声明、阈值、过程策略、错误凶手策略；具体 JUDGE 规则只在 rules_json 定义 |
 | `npc_policy_json` | jsonb | 否 | 数值范围、情绪映射和优先级；本版数据库数值硬边界为 0～100 |
 | `initial_state_json` | jsonb | 否 | 初始开放场景、公开信息/证据引用及固定介绍；不包含运行时事件 ID、角色初值副本或证据正文 |
-| `rules_json` | jsonb | 否 | 第 06 篇 EVENT、PROGRESS、JUDGE 规则；不复制 lie_rule 中的专用规则 |
+| `rules_json` | jsonb | 否 | 第 06 篇 EVENT、PROGRESS、JUDGE 规则，以及审讯配置（话题、矛盾表、无关操作代价与回避次数）；不复制 lie_rule 中的专用规则 |
 | `evidence_links_json` | jsonb | 否 | 预设 EvidenceLink 定义，允许空数组 |
 | `public_knowledge_json` | jsonb | 否 | 共同/公开 KnowledgeItem 定义；含 known_by、来源及披露条件，允许空数组 |
 | `timeline_origin_label` | varchar(128) | 否 | 案内相对时间零点，例如“案发当日 00:00” |
@@ -171,6 +171,7 @@ player_evidence:
 | `source_json` | jsonb | 否 | 固定内容来源，遵循有限 InformationSource 协议 |
 | `initial_credibility` | varchar(16) | 否 | UNVERIFIED、VERIFIED、DISPUTED、REFUTED |
 | `disclosure_condition_json` | jsonb | 否 | 当前允许披露的确定性条件 |
+| `disclosure` | varchar(16) | 否 | 已实现的两种披露方式：ADMITTED（承认后披露）或 ASKED（追问预设话题即登记为证词）；默认 ADMITTED |
 | `safe_deflection` | text | 否 | 未授权时的安全回避文本，不包含秘密暗示 |
 
 主键为 `(template_id, secret_id)`；外键 `(template_id, character_id)` → `character`。同一秘密允许多个人物知晓，正文只存一次；`known_by_json` 中的附加人物由发布校验检查，不依靠主要归属外键推断共享知识。
@@ -357,6 +358,7 @@ Case Service 将 `secret_id` 映射为 KnowledgeItem 的 `knowledge_id`，与 `p
 | `character_id` | varchar(64) | 否 | 主键组成，只为可审讯人物初始化 |
 | `pressure` | smallint | 否 | CHECK 0～100，来自对应角色显式初值 |
 | `trust` | smallint | 否 | CHECK 0～100 |
+| `irrelevant_streak` | smallint | 否 | 本次审讯连续无关操作次数，CHECK ≥ 0；达到配置次数即回避，结束审讯清零 |
 | `lies_json` | jsonb | 否 | 按 lie_rule_id 为键的 LieProgress，初始 UNBROKEN |
 | `updated_at` | timestamptz | 否 | 最近规则状态变化时间 |
 
@@ -431,7 +433,7 @@ Case Service 将 `secret_id` 映射为 KnowledgeItem 的 `knowledge_id`，与 `p
 | `template_id` | uuid | 否 | 同局版本复合外键 → game_session |
 | `action_id` | uuid | 否 | 同局复合外键 → action_request |
 | `event_seq` | bigint | 否 | 本局严格递增的事件序号，正整数 |
-| `event_type` | varchar(40) | 否 | 初始化、阶段切换、INVESTIGATE、PRESENT_EVIDENCE、SUBMIT_ACCUSATION 等 |
+| `event_type` | varchar(40) | 否 | 初始化、阶段切换、INVESTIGATE、ASK_TOPIC、PRESENT_EVIDENCE、POINT_CONTRADICTION、SUBMIT_ACCUSATION 等 |
 | `target_character_id` | varchar(64) | 是 | 角色相关事件的目标；同版本外键 → character |
 | `presented_evidence_id` | varchar(64) | 是 | 仅合法出示事件填写；同版本外键 → evidence |
 | `state_version_before` | bigint | 否 | 动作前版本，初始化事件为 0 |
@@ -800,6 +802,7 @@ erDiagram
         text content
         jsonb known_by_json
         jsonb disclosure_condition_json
+        varchar disclosure
     }
     scene {
         uuid template_id PK, FK
@@ -874,6 +877,7 @@ erDiagram
         uuid template_id FK
         smallint pressure
         smallint trust
+        smallint irrelevant_streak
         jsonb lies_json
     }
     action_request {

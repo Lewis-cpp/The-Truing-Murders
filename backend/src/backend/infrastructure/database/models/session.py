@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import CHAR, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,7 +31,7 @@ PHASES = (
 EVENT_TYPES = (
     "'SESSION_CREATED', 'INVESTIGATE', 'SET_INTERROGATION', 'END_INTERROGATION',"
     " 'PRESENT_EVIDENCE', 'OPEN_ACCUSATION', 'CANCEL_ACCUSATION', 'SUBMIT_ACCUSATION',"
-    " 'FINISH_REVIEW'"
+    " 'FINISH_REVIEW', 'ASK_TOPIC', 'POINT_CONTRADICTION'"
 )
 
 
@@ -253,6 +254,7 @@ class NpcState(Base):
         ),
         CheckConstraint("pressure BETWEEN 0 AND 100", name="pressure"),
         CheckConstraint("trust BETWEEN 0 AND 100", name="trust"),
+        CheckConstraint("irrelevant_streak >= 0", name="irrelevant_streak"),
         CheckConstraint("jsonb_typeof(lies_json) = 'object'", name="lies_json"),
         Index("ix_npc_state_definition", "template_id", "character_id"),
     )
@@ -262,6 +264,8 @@ class NpcState(Base):
     character_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     pressure: Mapped[int] = mapped_column(SmallInteger)
     trust: Mapped[int] = mapped_column(SmallInteger)
+    # Consecutive irrelevant moves in the current interrogation; evasion is derived from it.
+    irrelevant_streak: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     lies_json: Mapped[dict] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

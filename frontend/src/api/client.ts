@@ -9,12 +9,14 @@ export class ApiError extends Error {
   readonly code: string
   readonly status: number
   readonly retryable: boolean
+  readonly details: Record<string, unknown>
 
   constructor(status: number, body: ApiErrorBody) {
     super(body.message)
     this.code = body.code
     this.status = status
     this.retryable = body.retryable
+    this.details = body.details
   }
 }
 
