@@ -5,19 +5,24 @@ import type {
   AccusationContent,
   CaseSummary,
   CurrentSessionView,
+  PlayerOutcome,
   ReviewView,
   SessionView,
+  UnsupportedSave,
 } from '../api/types'
 
 interface Notice {
-  kind: 'success' | 'info'
+  kind: 'success' | 'info' | 'warning'
   text: string
 }
 
 interface DataWithSummary {
-  outcome?: { summary: string }
+  outcome?: PlayerOutcome
   fixed_reply?: string
 }
+
+// Outcomes where the NPC grew warier or would not engage; shown as a warning, not a success.
+const SETBACKS = ['IRRELEVANT_MOVE', 'NPC_EVADING']
 
 /** Server state only. The page is always rebuilt from a fresh GET after a confirmed write. */
 export const useGameStore = defineStore('game', () => {
@@ -25,6 +30,7 @@ export const useGameStore = defineStore('game', () => {
   const busy = ref(false)
   const cases = ref<CaseSummary[]>([])
   const view = ref<SessionView | null>(null)
+  const unsupported = ref<UnsupportedSave | null>(null)
   const review = ref<ReviewView | null>(null)
   const notice = ref<Notice | null>(null)
   const error = ref<string | null>(null)
@@ -40,10 +46,18 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function refresh() {
-    const current = await get<CurrentSessionView>('/api/v1/sessions/current')
-    view.value = current.session
+    try {
+      const current = await get<CurrentSessionView>('/api/v1/sessions/current')
+      view.value = current.session
+      unsupported.value = null
+    } catch (caught) {
+      // The server keeps the save; the lobby offers a new game that replaces it.
+      if (!(caught instanceof ApiError) || caught.code !== 'SAVE_VERSION_UNSUPPORTED') throw caught
+      view.value = null
+      unsupported.value = caught.details as unknown as UnsupportedSave
+    }
     review.value = null
-    const phase = current.session?.session.phase
+    const phase = view.value?.session.phase
     if (phase === 'REVIEW' || phase === 'FINISHED') {
       review.value = (await get<{ data: ReviewView }>(`${base()}/review`)).data
     }
@@ -84,16 +98,22 @@ export const useGameStore = defineStore('game', () => {
       const uncertain = !(caught instanceof ApiError) || caught.retryable
       if (!uncertain) pending.value = null
       error.value = describe(caught)
-      if (caught instanceof ApiError && caught.code === 'STATE_VERSION_CONFLICT') {
+      const code = caught instanceof ApiError ? caught.code : null
+      if (code === 'STATE_VERSION_CONFLICT' || code === 'SAVE_VERSION_UNSUPPORTED') {
         await refresh().catch(() => undefined)
       }
+      // The lobby warning already explains an unreadable save.
+      if (unsupported.value) error.value = null
     } finally {
       busy.value = false
     }
   }
 
   function summarize(data: DataWithSummary) {
-    if (data.outcome) notice.value = { kind: 'success', text: data.outcome.summary }
+    if (data.outcome) {
+      const kind = SETBACKS.includes(data.outcome.reason_code) ? 'warning' : 'success'
+      notice.value = { kind, text: data.outcome.summary }
+    }
     if (data.fixed_reply) replies.value = [...replies.value, data.fixed_reply]
   }
 
@@ -102,6 +122,7 @@ export const useGameStore = defineStore('game', () => {
     busy,
     cases,
     view,
+    unsupported,
     review,
     notice,
     error,
@@ -109,13 +130,15 @@ export const useGameStore = defineStore('game', () => {
     replies,
     init,
     retry: () => pending.value && run(pending.value, summarize),
-    start: (game: CaseSummary) =>
-      run(
-        newWrite('POST', '/api/v1/sessions', {
-          case_id: game.case_id,
-          case_version: game.case_version,
-        }),
-      ),
+    start: (game: CaseSummary) => {
+      const old = unsupported.value
+      const body = { case_id: game.case_id, case_version: game.case_version }
+      // An unreadable save stays stored; the new game only takes its place as the current one.
+      const replacing = old ? { replaces_session_id: old.session_id, confirm_restart: true } : {}
+      return run(
+        newWrite('POST', '/api/v1/sessions', { ...body, ...replacing }, old?.state_version),
+      )
+    },
     restart: (game: CaseSummary) =>
       run(
         newWrite(
@@ -145,10 +168,19 @@ export const useGameStore = defineStore('game', () => {
       ),
     talk: (npcId: string) =>
       run(newWrite('PUT', `${base()}/interrogation`, { npc_id: npcId }, version())),
-    endTalk: () => run(newWrite('DELETE', `${base()}/interrogation`, undefined, version())),
+    endTalk: () =>
+      run(newWrite('DELETE', `${base()}/interrogation`, undefined, version()), () => {
+        // Evasion ends with the interrogation, so the next one starts a fresh transcript.
+        replies.value = []
+      }),
     chat: (npcId: string, message: string) =>
       run(
         newWrite('POST', `${base()}/npcs/${npcId}/conversations`, { message }, version()),
+        summarize,
+      ),
+    askTopic: (npcId: string, topicId: string) =>
+      run(
+        newWrite('POST', `${base()}/npcs/${npcId}/questions`, { topic_id: topicId }, version()),
         summarize,
       ),
     present: (npcId: string, evidenceId: string) =>
@@ -157,6 +189,16 @@ export const useGameStore = defineStore('game', () => {
           'POST',
           `${base()}/npcs/${npcId}/evidence-presentations`,
           { evidence_id: evidenceId },
+          version(),
+        ),
+        summarize,
+      ),
+    contradict: (npcId: string, knowledgeId: string, evidenceId: string) =>
+      run(
+        newWrite(
+          'POST',
+          `${base()}/npcs/${npcId}/contradictions`,
+          { knowledge_id: knowledgeId, evidence_id: evidenceId },
           version(),
         ),
         summarize,

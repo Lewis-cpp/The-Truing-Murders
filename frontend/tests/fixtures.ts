@@ -3,7 +3,7 @@ import type { SessionView } from '../src/api/types'
 
 export const caseSummary = {
   case_id: 'case_001',
-  case_version: '1-slice',
+  case_version: '2-slice',
   title: '停电之夜',
   synopsis: '简介',
 }
@@ -13,7 +13,7 @@ export function sessionView(overrides: Partial<SessionView['session']> = {}): Se
     session: {
       session_id: '00000000-0000-4000-8000-000000000001',
       case_id: 'case_001',
-      case_version: '1-slice',
+      case_version: '2-slice',
       title: '停电之夜',
       phase: 'INVESTIGATION',
       state_version: 1,

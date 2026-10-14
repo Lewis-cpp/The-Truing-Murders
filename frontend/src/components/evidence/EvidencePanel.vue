@@ -24,7 +24,7 @@ const game = useGameStore()
       class="evidence"
     >
       <h3>
-        证词 · {{ info.source.label }}
+        {{ info.information_ref.id }} · 证词 · {{ info.source.label }}
         <ElTag size="small" type="warning">未经核验</ElTag>
       </h3>
       <p>{{ info.content }}</p>

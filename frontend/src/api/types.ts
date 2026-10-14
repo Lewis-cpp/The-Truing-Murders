@@ -74,17 +74,25 @@ export interface KnownInformation {
   discovered_at: string | null
 }
 
+export interface TopicView {
+  topic_id: string
+  label: string
+  asked: boolean
+}
+
 export interface NpcView {
   npc_id: string
   name: string
   public_identity: string
   is_contactable: boolean
   is_active: boolean
+  is_evading: boolean
   emotion: string
   admission_progress: string
   display_state: string
   fixed_statement: string | null
   presented_evidence_ids: string[]
+  topics: TopicView[]
 }
 
 export interface Option {
@@ -113,6 +121,12 @@ export interface SessionView {
 export interface CurrentSessionView {
   current_session_id: string | null
   session: SessionView | null
+}
+
+/** Details of 409 SAVE_VERSION_UNSUPPORTED: the kept save that a new game may replace. */
+export interface UnsupportedSave {
+  session_id: string
+  state_version: number
 }
 
 export interface PlayerOutcome {
