@@ -103,6 +103,16 @@ def test_costs_that_could_block_the_admission_are_rejected(tmp_path, raw):
     assert load_case(write_case(tmp_path, raw)).lie.admission_trust_min == 30
 
 
+def test_irrelevant_evidence_counts_toward_the_worst_case_cost(tmp_path, raw):
+    # Two wrong pairings leave 30 trust and E01 costs 5, so a trust path of 25 holds...
+    raw["lie"].update({"admission_pressure_min": None, "admission_trust_min": 25})
+    assert load_case(write_case(tmp_path, raw)).lie.admission_trust_min == 25
+    # ...until E02 is no longer part of the lie and presenting it may cost 5 more first.
+    raw["lie"]["effects"] = [e for e in raw["lie"]["effects"] if e["evidence_id"] != "E02"]
+    with pytest.raises(ValueError, match="代价"):
+        load_case(write_case(tmp_path, raw))
+
+
 def test_contradiction_needs_verified_evidence(tmp_path, raw):
     contradiction = raw["interrogation"]["contradictions"][0]
     contradiction["evidence_id"] = "E02"
