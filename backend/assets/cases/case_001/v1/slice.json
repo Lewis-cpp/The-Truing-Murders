@@ -120,7 +120,6 @@
     "admitted_knowledge_id": "K02",
     "effects": [
       { "evidence_id": "E01", "pressure": 25, "trust": -5 },
-      { "evidence_id": "E02", "pressure": 0, "trust": 0 },
       { "evidence_id": "E03", "pressure": 25, "trust": 0 }
     ]
   },

@@ -22,12 +22,6 @@ def game():
     return Game(load_case())
 
 
-def unrelated(case, evidence_id):
-    """The case with this evidence dropped from the lie, so presenting it is an irrelevant move."""
-    effects = tuple(e for e in case.lie.effects if e.evidence_id != evidence_id)
-    return case.model_copy(update={"lie": case.lie.model_copy(update={"effects": effects})})
-
-
 @pytest.mark.parametrize("example", EXPECTED, ids=lambda e: e["name"])
 def test_independent_verdict_examples(game, example):
     for action in example["actions"]:
@@ -64,13 +58,17 @@ def test_explicit_presentations_are_order_safe_and_repeat_safe(game, order):
     game.talk("NPC01")
     for evidence in order:
         game.present("NPC01", evidence)
-    # E02 is part of L01 with a zero effect: it moves nothing and costs nothing in any order.
-    assert game.state.npc == NPCState(70, 35, LieStage.ADMITTED, frozenset(order))
+    npc = game.state.npc
+    # E02 belongs to no part of L01: it costs trust once and never moves pressure or the lie.
+    assert (npc.pressure, npc.trust, npc.lie_stage) == (70, 30, LieStage.ADMITTED)
+    assert npc.presented == frozenset(order)
     assert game.state.disclosed_knowledge == {"K02"}
-    before = game.state
+    effects = game.state.consumed_effects
     for evidence in order:
         game.present("NPC01", evidence)
-    assert game.state == before
+    assert (game.state.npc.pressure, game.state.npc.trust) == (70, 30)
+    assert game.state.consumed_effects == effects
+    assert game.state.disclosed_knowledge == {"K02"}
     game.back()
     assert game.state.phase == Phase.DEEP_INVESTIGATION
     game.talk("NPC01")
@@ -205,13 +203,12 @@ def interrogating(game):
 
 def test_only_the_lie_layer_evidence_is_relevant():
     case = load_case()
-    assert relevant_evidence(case, "NPC01") == {"E01", "E02", "E03"}
-    assert relevant_evidence(unrelated(case, "E02"), "NPC01") == {"E01", "E03"}
+    assert relevant_evidence(case, "NPC01") == {"E01", "E03"}
     assert relevant_evidence(case, "NPC02") == frozenset()
 
 
-def test_irrelevant_presentations_cost_trust_once_and_two_in_a_row_cause_evasion():
-    game = interrogating(Game(unrelated(load_case(), "E02")))
+def test_irrelevant_presentations_cost_trust_once_and_two_in_a_row_cause_evasion(game):
+    interrogating(game)
     assert "无关" in game.present("NPC01", "E02")
     assert (game.state.npc.pressure, game.state.npc.trust) == (20, 35)
     assert game.state.npc.irrelevant_streak == 1 and not game.evading
@@ -303,9 +300,8 @@ def test_wrong_pairing_costs_like_an_irrelevant_presentation(game):
         assert game.state == stuck
 
 
-@pytest.mark.parametrize("related,worst", [(True, 30), (False, 25)], ids=["slice", "E02-unrelated"])
-def test_worst_case_costs_cannot_make_the_admission_unreachable(related, worst):
-    case = load_case() if related else unrelated(load_case(), "E02")
+def test_worst_case_costs_cannot_make_the_admission_unreachable():
+    case = load_case()
     state = GameState(
         npc=NPCState(case.npc.initial_pressure, case.npc.initial_trust),
         phase=Phase.INTERROGATION,
@@ -321,13 +317,13 @@ def test_worst_case_costs_cannot_make_the_admission_unreachable(related, worst):
         state = move(state)
         if state.npc.irrelevant_streak >= case.interrogation.evade_after:
             state = transition(transition(state, "back"), "talk", "NPC01")
-    assert state.npc.trust == worst
+    assert state.npc.trust == 25
     state = present(case, present(case, state, "NPC01", "E01"), "NPC01", "E03")
     assert state.npc.lie_stage == LieStage.ADMITTED
 
 
 def test_costs_are_clamped_and_consumed_even_at_zero_trust():
-    case = unrelated(load_case(), "E02")
+    case = load_case()
     state = GameState(
         npc=NPCState(20, 2),
         phase=Phase.INTERROGATION,

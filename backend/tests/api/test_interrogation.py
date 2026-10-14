@@ -84,7 +84,7 @@ def test_irrelevant_moves_lead_to_evasion_until_the_player_leaves(client, db):
     assert outcome(wrong)["reason_code"] == "IRRELEVANT_MOVE"
     assert "戒备" in outcome(wrong)["summary"]
     assert outcome(wrong)["npc"]["is_evading"] is False
-    evading = player.contradict("K03", "E02")
+    evading = player.present("E02")
     evade_reply = evading.json()["data"]["fixed_reply"]
     assert outcome(evading)["reason_code"] == "NPC_EVADING"
     assert outcome(evading)["npc"]["is_evading"] is True
@@ -118,18 +118,15 @@ def test_interrogation_responses_hide_numbers_and_unasked_testimony(client):
             for marker in ("pressure", "trust", "irrelevant_streak", "我是猜的", *markers):
                 assert marker not in text_value
 
-    hidden(
-        [player.load(), player.present("E02").json(), player.contradict("K03", "E03").json()],
-        "B17的原件",
-    )
+    hidden([player.load(), player.contradict("K03", "E03").json()], "B17的原件")
     player.ask_topic("Q01")
-    # A wrong pairing and the evasion it leads to describe the cost in words only.
-    wrong, evading = player.contradict("K03", "E01"), player.contradict("K03", "E02")
-    assert [outcome(r)["reason_code"] for r in (wrong, evading)] == [
+    # An irrelevant presentation and the evasion that follows describe the cost in words only.
+    irrelevant, evading = player.present("E02"), player.contradict("K03", "E01")
+    assert [outcome(r)["reason_code"] for r in (irrelevant, evading)] == [
         "IRRELEVANT_MOVE",
         "NPC_EVADING",
     ]
-    hidden([wrong.json(), evading.json(), player.load()])
+    hidden([irrelevant.json(), evading.json(), player.load()])
 
 
 def test_unsupported_save_is_kept_and_can_be_replaced(client, db, tmp_path):
