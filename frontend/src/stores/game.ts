@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { ApiError, ensureVisitor, get, newWrite, send, type PendingWrite } from '../api/client'
+import {
+  ApiError,
+  ensureVisitor,
+  get,
+  newWrite,
+  send,
+  UncertainError,
+  type PendingWrite,
+} from '../api/client'
 import type {
   AccusationContent,
   CaseSummary,
@@ -23,6 +31,14 @@ interface DataWithSummary {
 
 // Outcomes where the NPC grew warier or would not engage; shown as a warning, not a success.
 const SETBACKS = ['IRRELEVANT_MOVE', 'NPC_EVADING']
+// Rejections meaning the page shows an outdated save, e.g. another tab saved or restarted.
+const OUTDATED = [
+  'STATE_VERSION_CONFLICT',
+  'SAVE_VERSION_UNSUPPORTED',
+  'SESSION_NOT_CURRENT',
+  'CURRENT_SESSION_CONFLICT',
+  'CURRENT_SESSION_EXISTS',
+]
 
 /** Server state only. The page is always rebuilt from a fresh GET after a confirmed write. */
 export const useGameStore = defineStore('game', () => {
@@ -34,6 +50,8 @@ export const useGameStore = defineStore('game', () => {
   const review = ref<ReviewView | null>(null)
   const notice = ref<Notice | null>(null)
   const error = ref<string | null>(null)
+  // A confirmed write whose follow-up read failed; the page needs a reload.
+  const stale = ref(false)
   const pending = ref<PendingWrite | null>(null)
   const replies = ref<string[]>([])
 
@@ -66,6 +84,7 @@ export const useGameStore = defineStore('game', () => {
   async function init() {
     loading.value = true
     error.value = null
+    stale.value = false
     try {
       await ensureVisitor()
       cases.value = (await get<{ items: CaseSummary[] }>('/api/v1/cases')).items
@@ -78,20 +97,28 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function describe(caught: unknown): string {
-    if (caught instanceof Error) return caught.message
-    return '操作失败，请重试。'
+    // Browser fetch errors carry English text such as "Failed to fetch".
+    if (caught instanceof ApiError || caught instanceof UncertainError) return caught.message
+    return '网络异常，请稍后重试。'
   }
 
   async function run(write: PendingWrite, onSuccess?: (data: DataWithSummary) => void) {
     busy.value = true
     error.value = null
     notice.value = null
+    stale.value = false
     pending.value = write
     try {
       const result = await send<DataWithSummary>(write)
       pending.value = null
       onSuccess?.(result.data)
-      await refresh()
+      try {
+        await refresh()
+      } catch {
+        // The write is saved; only the page is behind, so offer a reload, not a resend.
+        stale.value = true
+        error.value = '操作已保存，但读取最新进度失败，请重新加载。'
+      }
     } catch (caught) {
       // Keep the same key only when the outcome is unknown; a definite rejection needs a new
       // operation against the latest state.
@@ -99,9 +126,7 @@ export const useGameStore = defineStore('game', () => {
       if (!uncertain) pending.value = null
       error.value = describe(caught)
       const code = caught instanceof ApiError ? caught.code : null
-      if (code === 'STATE_VERSION_CONFLICT' || code === 'SAVE_VERSION_UNSUPPORTED') {
-        await refresh().catch(() => undefined)
-      }
+      if (code && OUTDATED.includes(code)) await refresh().catch(() => undefined)
       // The lobby warning already explains an unreadable save.
       if (code === 'SAVE_VERSION_UNSUPPORTED' && unsupported.value) error.value = null
     } finally {
@@ -126,6 +151,7 @@ export const useGameStore = defineStore('game', () => {
     review,
     notice,
     error,
+    stale,
     pending,
     replies,
     init,

@@ -339,3 +339,86 @@ describe('unreadable save', () => {
     wrapper.unmount()
   })
 })
+
+describe('outdated page', () => {
+  const second = '00000000-0000-4000-8000-000000000002'
+
+  it('switches to the current game after another tab restarted', async () => {
+    const fresh = sessionView({ session_id: second })
+    fresh.scenes[0].actions[0].label = '新局的调查点'
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': views(sessionView(), fresh),
+      [`POST ${session}/scenes/S01/investigations`]: () =>
+        json(409, {
+          error: {
+            code: 'SESSION_NOT_CURRENT',
+            message: '这是已被替换的旧局，只能查看。',
+            details: {},
+            retryable: false,
+          },
+        }),
+    })
+    const wrapper = await mountView()
+    await button(wrapper, '查看备用门禁终端').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.feedback.error').text()).toContain('已被替换')
+    expect(wrapper.text()).toContain('新局的调查点')
+    wrapper.unmount()
+  })
+
+  it('offers a reload, not a resend, when a saved write cannot be read back', async () => {
+    const reads: (SessionView | null)[] = [sessionView(), null, sessionView({ state_version: 2 })]
+    const writes: string[] = []
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': () => {
+        const view = reads.shift()
+        if (!view) return Promise.reject(new TypeError('Failed to fetch'))
+        return json(200, { current_session_id: view.session.session_id, session: view })
+      },
+      [`POST ${session}/scenes/S01/investigations`]: (init) => {
+        writes.push(sent(init).version)
+        return json(
+          201,
+          result({ outcome: { reason_code: 'PROGRESS_UPDATED', summary: '获得 E01' } }, 2),
+        )
+      },
+    })
+    const wrapper = await mountView()
+    await button(wrapper, '查看备用门禁终端').trigger('click')
+    await flushPromises()
+    const alert = wrapper.get('.feedback.error').text()
+    expect(alert).toContain('操作已保存，但读取最新进度失败')
+    expect(alert).not.toContain('Failed to fetch')
+    expect(button(wrapper, '重试同一操作')).toBeUndefined()
+
+    await button(wrapper, '重新加载').trigger('click')
+    await flushPromises()
+    expect(writes).toEqual(['1'])
+    expect(wrapper.find('.feedback.error').exists()).toBe(false)
+    expect(wrapper.text()).toContain('存档版本 2')
+    wrapper.unmount()
+  })
+
+  it('starts a restarted game without the old game’s selections', async () => {
+    const fresh = interrogation({}, 1)
+    fresh.session.session_id = second
+    fresh.evidence = []
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': views(interrogation(), fresh),
+      'POST /api/v1/sessions': () => json(201, result(fresh, 1)),
+    })
+    const wrapper = await mountView()
+    wrapper.findAllComponents(ElSelect)[0].vm.$emit('update:modelValue', 'E03')
+    await flushPromises()
+    expect(button(wrapper, '出示').attributes('disabled')).toBeUndefined()
+
+    wrapper.findComponent(ElPopconfirm).vm.$emit('confirm', new MouseEvent('click'))
+    await flushPromises()
+    expect(wrapper.find('.feedback.error').exists()).toBe(false)
+    expect(button(wrapper, '出示').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+})

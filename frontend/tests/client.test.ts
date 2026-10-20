@@ -37,6 +37,24 @@ describe('write protocol', () => {
     await expect(send(write)).resolves.toEqual(committed)
   })
 
+  it('reports a stored rejection found after the connection drops', async () => {
+    const write = newWrite('POST', '/api/v1/x', {}, 1)
+    const rejection = { code: 'STATE_VERSION_CONFLICT', message: '已更新', details: {} }
+    stubFetch({
+      'POST /api/v1/x': () => Promise.reject(new TypeError('network')),
+      [`GET /api/v1/requests/${write.key}`]: () =>
+        json(200, {
+          status: 'REJECTED',
+          original_http_status: 409,
+          result: null,
+          error: { ...rejection, retryable: false },
+        }),
+    })
+    const failure = await send(write).catch((error) => error)
+    expect(failure).toBeInstanceOf(ApiError)
+    expect([failure.code, failure.status]).toEqual(['STATE_VERSION_CONFLICT', 409])
+  })
+
   it('never claims success when the outcome is unknown or the database failed', async () => {
     const write = newWrite('POST', '/api/v1/x', {}, 1)
     stubFetch({
