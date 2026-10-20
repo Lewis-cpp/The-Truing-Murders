@@ -42,6 +42,8 @@ app.include_router(sessions.router)
 @app.middleware("http")
 async def protocol_guard(request: Request, call_next):
     request.state.trace_id = str(uuid.uuid4())
+    # shortcut: chunked bodies carry no Content-Length and skip both checks; fine while the
+    # server binds 127.0.0.1, enforce the limit on the read body before any public deployment.
     length = request.headers.get("content-length")
     problem = None
     if length and length.isdecimal() and int(length) > MAX_BODY_BYTES:
