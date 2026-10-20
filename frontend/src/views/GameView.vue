@@ -63,7 +63,12 @@ onMounted(game.init)
         <ElButton v-if="game.pending" size="small" :loading="game.busy" @click="game.retry()">
           重试同一操作
         </ElButton>
-        <ElButton v-else-if="!game.view" size="small" :loading="game.loading" @click="game.init()">
+        <ElButton
+          v-else-if="!game.view || game.stale"
+          size="small"
+          :loading="game.loading"
+          @click="game.init()"
+        >
           重新加载
         </ElButton>
       </ElAlert>
@@ -95,7 +100,8 @@ onMounted(game.init)
       <div v-else class="columns">
         <div>
           <ScenePanel />
-          <InterrogationPanel />
+          <!-- A new game must not inherit the last game's selections. -->
+          <InterrogationPanel :key="game.view.session.session_id" />
           <ElButton
             type="danger"
             plain

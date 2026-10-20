@@ -105,7 +105,11 @@ export async function send<T>(write: PendingWrite): Promise<ActionResult<T>> {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
   } catch {
-    const saved = await lookup(write.key).catch(() => null)
+    // A stored rejection is a definite answer; a failed lookup leaves the outcome unknown.
+    const saved = await lookup(write.key).catch((error) => {
+      if (error instanceof ApiError && !error.retryable) throw error
+      return null
+    })
     if (saved) return saved as ActionResult<T>
     throw new UncertainError()
   }

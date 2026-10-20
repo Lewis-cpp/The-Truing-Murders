@@ -1,4 +1,12 @@
-from backend.domain.models import Accusation, Case, GameError, GameState, NPCState, Phase
+from backend.domain.models import (
+    Accusation,
+    Case,
+    GameError,
+    GameState,
+    NPCState,
+    Phase,
+    Verdict,
+)
 from backend.domain.state_machine import evading
 
 
@@ -66,6 +74,49 @@ def current_statement(case: Case, npc: NPCState) -> str:
     if evading(case, npc):
         return case.interrogation.evade_reply
     return getattr(case.lie.statements, npc.lie_stage.value.lower())
+
+
+FIXED_SUMMARIES = {
+    "TOPIC_ALREADY_ASKED": "这个问题已经问过，证词仍在记录中。",
+    "TESTIMONY_RECORDED": "证词已记录（未经核验）。",
+    "ADMISSION_RECORDED": "承认已记录（未经独立核验的证词）。",
+    "LIE_BROKEN": "谎言已击破。",
+    "ALREADY_PRESENTED": "已经出示过，未重复增加收益。",
+    "EVIDENCE_RECORDED": "出示已记录。",
+    "CONTRADICTION_ALREADY_POINTED": "这个矛盾已经指出过，不会重复产生效果。",
+}
+
+
+def outcome_text(
+    case: Case,
+    code: str,
+    before: GameState,
+    after: GameState,
+    label: str,
+    reply: str,
+    leave: str = "结束审讯",
+) -> tuple[str, str, str]:
+    """(reason code, summary, reply) for an outcome code. `label` is the move's own words for
+    codes without a fixed summary. Costs are described, never shown as numbers."""
+    name, policy = case.npc.name, case.interrogation
+    if code == "NPC_EVADING":
+        return code, f"{name}在回避，暂时问不出什么；{leave}后再来。", policy.evade_reply
+    if code == "EVASION_STARTED":
+        summary = f"{label}连续的无关操作让{name}开始回避；{leave}后再来。"
+        return "NPC_EVADING", summary, policy.evade_reply
+    if code == "IRRELEVANT_MOVE":
+        if after.npc.trust < before.npc.trust:
+            label += f"{name}对你更戒备了。"
+        return code, label, policy.irrelevant_reply
+    return code, FIXED_SUMMARIES.get(code, label), reply
+
+
+def fixed_review(case: Case, verdict: Verdict) -> str:
+    lines = [f"结案：{verdict.category} · {verdict.score}/100"]
+    lines.extend(f"{c.label} {c.points}/{c.maximum}：{c.explanation}" for c in verdict.criteria)
+    lines.extend(["案情复盘", case.truth.explanation])
+    lines.append("复盘不会补发遗漏证据，证词与调查记录已经冻结。")
+    return "\n".join(lines)
 
 
 def npc_view(case: Case, state: GameState, npc_id: str) -> dict:

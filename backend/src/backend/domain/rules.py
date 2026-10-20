@@ -178,6 +178,45 @@ def contradict(
     return replace(state, npc=npc, consumed_effects=consumed)
 
 
+# Outcome codes of an interrogation move, decided once for the CLI and the API.
+
+
+def _setback(case: Case, after: GameState) -> str:
+    return "EVASION_STARTED" if evading(case, after.npc) else "IRRELEVANT_MOVE"
+
+
+def topic_outcome(case: Case, before: GameState, knowledge_id: str) -> str:
+    if evading(case, before.npc):
+        return "NPC_EVADING"
+    if knowledge_id in before.disclosed_knowledge:
+        return "TOPIC_ALREADY_ASKED"
+    return "TESTIMONY_RECORDED"
+
+
+def present_outcome(
+    case: Case, before: GameState, after: GameState, npc_id: str, evidence_id: str
+) -> str:
+    if evading(case, before.npc):
+        return "NPC_EVADING"
+    if evidence_id not in relevant_evidence(case, npc_id):
+        return _setback(case, after)
+    if after.npc.lie_stage != before.npc.lie_stage:
+        return "ADMISSION_RECORDED" if after.npc.lie_stage == LieStage.ADMITTED else "LIE_BROKEN"
+    if evidence_id in before.npc.presented:
+        return "ALREADY_PRESENTED"
+    return "EVIDENCE_RECORDED"
+
+
+def contradiction_outcome(case: Case, before: GameState, after: GameState, matched: bool) -> str:
+    if evading(case, before.npc):
+        return "NPC_EVADING"
+    if not matched:
+        return _setback(case, after)
+    if after.consumed_effects == before.consumed_effects:
+        return "CONTRADICTION_ALREADY_POINTED"
+    return "CONTRADICTION_CONFIRMED"
+
+
 def judge(case: Case, state: GameState, accusation: Accusation) -> GameState:
     guard(state, "submit")
     validate_accusation(case, state, accusation)
