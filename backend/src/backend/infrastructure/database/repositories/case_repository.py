@@ -37,9 +37,6 @@ class CaseRepository:
             )
         )
 
-    def get(self, template_id: uuid.UUID) -> CaseTemplate | None:
-        return self._db.get(CaseTemplate, template_id)
-
     def list_published(self) -> list[CaseTemplate]:
         return list(
             self._db.scalars(
