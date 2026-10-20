@@ -81,7 +81,8 @@ h1 {
   margin-bottom: 4px;
 }
 
-.source {
+.source,
+.hint {
   color: #909399;
   font-size: 0.85rem;
 }

@@ -33,7 +33,7 @@ def count(db, table) -> int:
 def test_database_definition_reproduces_the_reviewed_case(db):
     case = load_case()
     with db() as session:
-        template = CaseRepository(session).find("case_001", "1-slice")
+        template = CaseRepository(session).find("case_001", case.version)
         assert template.status == "PUBLISHED"
         assert template.content_hash == content_hash(case)
         assert (
@@ -112,7 +112,7 @@ def test_composite_keys_and_uniqueness_hold_in_postgresql(client, db, tmp_path):
     player.talk()
     player.present("E01")
     raw = json.loads(default_case_path().read_text())
-    raw["version"] = "2-slice"
+    raw["version"] = "test-copy"
     path = tmp_path / "case.json"
     path.write_text(json.dumps(raw, ensure_ascii=False))
     other_template = uuid.UUID(import_case(db, path).template_id)
@@ -163,6 +163,9 @@ def test_composite_keys_and_uniqueness_hold_in_postgresql(client, db, tmp_path):
             {"id": session_id},
         )
     )
+    # Streaks never go negative, and stored secrets are either admitted or asked.
+    violates(lambda s: s.execute(text("UPDATE npc_state SET irrelevant_streak = -1")))
+    violates(lambda s: s.execute(text("UPDATE character_secret SET disclosure = 'PUBLIC'")))
 
 
 def test_only_one_formal_accusation_per_game(client, db):

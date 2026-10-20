@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from backend.domain.models import Case, GameState, LieStage, NPCState, Phase
-from backend.domain.rules import present
+from backend.domain.rules import present, relevant_evidence
 
 
 def default_case_path() -> Path:
@@ -72,6 +72,7 @@ def validate_case(case: Case) -> None:
     admitted = next(k for k in case.knowledge if k.id == case.lie.admitted_knowledge_id)
     if admitted.disclosure != "ADMITTED" or case.npc.id not in admitted.known_by:
         raise ValueError("承认条目必须是本 NPC 的私有知识。")
+    _validate_interrogation(case, evidence_ids)
     if not (case.lie.counterevidence.all_of or case.lie.counterevidence.any_of):
         raise ValueError("谎言必须具有反证硬门槛。")
     if case.lie.admission_pressure_min is None and case.lie.admission_trust_min is None:
@@ -116,20 +117,70 @@ def validate_case(case: Case) -> None:
     if unsupported_max >= scoring.correct_min:
         raise ValueError("无证据的猜测不能达到正确阈值。")
 
-    # Three pieces of evidence: search up to six orders for an attainable admission.
-    for order in permutations(case.evidence):
-        state = GameState(
-            npc=NPCState(case.npc.initial_pressure, case.npc.initial_trust),
-            phase=Phase.INTERROGATION,
-            active_npc_id=case.npc.id,
-            evidence_ids=reached,
-        )
-        for evidence in order:
-            state = present(case, state, case.npc.id, evidence.id)
-        if state.npc.lie_stage == LieStage.ADMITTED:
-            break
-    else:
-        raise ValueError("反证、可信度或数值门槛使承认不可达。")
+    # Search every order of the lie's own evidence for an attainable admission, both from the
+    # initial values and after every irrelevant-move cost a player could pay first.
+    relevant = sorted(relevant_evidence(case, case.npc.id))
+    for trust in (case.npc.initial_trust, _worst_trust(case)):
+        for order in permutations(relevant):
+            state = GameState(
+                npc=NPCState(case.npc.initial_pressure, trust),
+                phase=Phase.INTERROGATION,
+                active_npc_id=case.npc.id,
+                evidence_ids=reached,
+            )
+            for evidence_id in order:
+                state = present(case, state, case.npc.id, evidence_id)
+            if state.npc.lie_stage == LieStage.ADMITTED:
+                break
+        else:
+            raise ValueError("反证、可信度、数值门槛或无关操作的代价使承认不可达。")
+
+
+def _validate_interrogation(case: Case, evidence_ids: set[str]) -> None:
+    rules = case.interrogation
+    knowledge = {k.id: k for k in case.knowledge}
+    _unique((t.id for t in rules.topics), "话题")
+    _unique((c.id for c in rules.contradictions), "矛盾")
+    _unique(((c.knowledge_id, c.evidence_id) for c in rules.contradictions), "矛盾配对")
+    for topic in rules.topics:
+        target = knowledge.get(topic.knowledge_id)
+        if (
+            topic.npc_id != case.npc.id
+            or target is None
+            or target.disclosure != "ASKED"
+            or case.npc.id not in target.known_by
+        ):
+            raise ValueError("话题必须由本 NPC 回答，并登记一条 ASKED 证词。")
+    asked = {t.knowledge_id for t in rules.topics}
+    if any(k.disclosure == "ASKED" and k.id not in asked for k in case.knowledge):
+        raise ValueError("ASKED 证词必须有对应的话题。")
+    verified = {e.id for e in case.evidence if e.credibility == "VERIFIED"}
+    for contradiction in rules.contradictions:
+        target = knowledge.get(contradiction.knowledge_id)
+        if (
+            contradiction.npc_id != case.npc.id
+            or target is None
+            or target.disclosure == "PUBLIC"
+            or case.npc.id not in target.known_by
+        ):
+            raise ValueError("矛盾必须引用本 NPC 可被记录的证词。")
+        if contradiction.evidence_id not in evidence_ids:
+            raise ValueError("矛盾引用的证据不存在。")
+        if contradiction.evidence_id not in verified:
+            raise ValueError("矛盾所依据的证据必须有核验来源。")
+
+
+def _worst_trust(case: Case) -> int:
+    """Trust after every one-time cost a player can pay before the admission."""
+    rules = case.interrogation
+    relevant = relevant_evidence(case, case.npc.id)
+    irrelevant = [e.id for e in case.evidence if e.id not in relevant]
+    asked = [k.id for k in case.knowledge if k.disclosure == "ASKED"]
+    valid = {(c.knowledge_id, c.evidence_id) for c in rules.contradictions}
+    mismatches = [(k, e.id) for k in asked for e in case.evidence if (k, e.id) not in valid]
+    costs = rules.irrelevant_trust * (len(irrelevant) + len(mismatches))
+    costs += sum(min(0, c.trust) for c in rules.contradictions)
+    return max(0, case.npc.initial_trust + costs)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:

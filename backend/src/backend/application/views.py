@@ -2,8 +2,9 @@
 
 from datetime import datetime
 
+from backend.domain.evidence import current_statement
 from backend.domain.models import Case, LieStage, Phase
-from backend.domain.state_machine import emotion
+from backend.domain.state_machine import emotion, evading
 from backend.infrastructure.database.models import CaseTemplate
 from backend.infrastructure.database.repositories.session_repository import (
     CATEGORY_CODES,
@@ -18,7 +19,9 @@ AVAILABLE_ACTIONS = {
         "SET_INTERROGATION",
         "END_INTERROGATION",
         "CHAT",
+        "ASK_TOPIC",
         "PRESENT_EVIDENCE",
+        "POINT_CONTRADICTION",
         "OPEN_ACCUSATION",
         "RESTART",
     ],
@@ -80,26 +83,35 @@ def known_information(case: Case, saved: SavedGame, knowledge_id: str) -> dict:
     }
 
 
-def fixed_statement(case: Case, stage: LieStage) -> str:
-    return getattr(case.lie.statements, stage.value.lower())
-
-
 def npc_view(case: Case, saved: SavedGame) -> dict:
+    """Emotion, admission and evasion only; pressure and trust are never shown as numbers."""
     state = saved.state
     npc = state.npc
     admitted = npc.lie_stage == LieStage.ADMITTED
     is_active = state.active_npc_id == case.npc.id
+    is_evading = is_active and evading(case, npc)
+    display_state = "CONFESSION" if admitted else emotion(npc)
     return {
         "npc_id": case.npc.id,
         "name": case.npc.name,
         "public_identity": case.npc.role,
         "is_contactable": True,
         "is_active": is_active,
+        "is_evading": is_evading,
         "emotion": emotion(npc),
         "admission_progress": "CONFESSION" if admitted else "NONE",
-        "display_state": "CONFESSION" if admitted else emotion(npc),
-        "fixed_statement": fixed_statement(case, npc.lie_stage) if is_active else None,
+        "display_state": "EVADING" if is_evading else display_state,
+        "fixed_statement": current_statement(case, npc) if is_active else None,
         "presented_evidence_ids": sorted(npc.presented & state.evidence_ids),
+        "topics": [
+            {
+                "topic_id": topic.id,
+                "label": topic.label,
+                "asked": topic.knowledge_id in state.disclosed_knowledge,
+            }
+            for topic in case.interrogation.topics
+            if topic.npc_id == case.npc.id
+        ],
     }
 
 

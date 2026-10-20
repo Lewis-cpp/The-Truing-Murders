@@ -95,7 +95,7 @@ def test_invalid_submission_does_not_close_or_change_state(game, changes):
     assert game.state.verdict is None
 
 
-@pytest.mark.parametrize("step,evidence", [("P_POISON", "E01"), ("P_ENTER", "E02")])
+@pytest.mark.parametrize("step,evidence", [("P_SEARCH_FIRST", "E01"), ("P_ENTER", "E02")])
 def test_links_must_belong_to_submitted_steps_and_citations(game, step, evidence):
     from backend.domain.models import StepEvidenceLink
 

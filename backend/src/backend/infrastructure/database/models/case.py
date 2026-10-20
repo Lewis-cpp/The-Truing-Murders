@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import CHAR, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -114,6 +115,7 @@ class CharacterSecret(Base):
             "jsonb_typeof(known_by_json) = 'array' AND jsonb_array_length(known_by_json) > 0",
             name="known_by_json",
         ),
+        CheckConstraint("disclosure IN ('ADMITTED', 'ASKED')", name="disclosure"),
         Index("ix_character_secret_owner", "template_id", "character_id", "secret_id"),
     )
 
@@ -126,6 +128,8 @@ class CharacterSecret(Base):
     known_by_json: Mapped[list] = mapped_column(JSONB)
     assertion_kind: Mapped[str] = mapped_column(String(16))
     initial_credibility: Mapped[str] = mapped_column(String(16))
+    # How the entry reaches the player: a lie admission, or the answer to a fixed topic.
+    disclosure: Mapped[str] = mapped_column(String(16), server_default=text("'ADMITTED'"))
 
 
 class Scene(Base):

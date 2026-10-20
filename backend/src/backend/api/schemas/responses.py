@@ -100,17 +100,25 @@ class KnownInformation(BaseModel):
     discovered_at: datetime | None
 
 
+class TopicView(BaseModel):
+    topic_id: str
+    label: str
+    asked: bool
+
+
 class NpcView(BaseModel):
     npc_id: str
     name: str
     public_identity: str
     is_contactable: bool
     is_active: bool
+    is_evading: bool
     emotion: Literal["CALM", "DEFENSIVE", "NERVOUS", "PRESSURED"]
     admission_progress: Literal["NONE", "PARTIAL_CONFESSION", "CONFESSION"]
     display_state: str
     fixed_statement: str | None
     presented_evidence_ids: list[str]
+    topics: list[TopicView]
 
 
 class Option(BaseModel):
@@ -166,8 +174,23 @@ class ChatResult(BaseModel):
     fixed_reply: str
 
 
+class QuestionResult(BaseModel):
+    npc_id: str
+    topic_id: str
+    fixed_reply: str
+    outcome: PlayerOutcome
+
+
 class PresentationResult(BaseModel):
     npc_id: str
+    evidence_id: str
+    fixed_reply: str
+    outcome: PlayerOutcome
+
+
+class ContradictionResult(BaseModel):
+    npc_id: str
+    knowledge_id: str
     evidence_id: str
     fixed_reply: str
     outcome: PlayerOutcome

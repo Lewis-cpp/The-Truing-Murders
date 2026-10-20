@@ -80,7 +80,8 @@ class Knowledge(Definition):
     id: Text
     content: Text
     known_by: tuple[Text, ...]
-    disclosure: Literal["PUBLIC", "ADMITTED"]
+    # ADMITTED is disclosed by a lie admission; ASKED records an NPC's answer to a fixed topic.
+    disclosure: Literal["PUBLIC", "ADMITTED", "ASKED"]
 
 
 class PresentEffect(Definition):
@@ -105,6 +106,40 @@ class Lie(Definition):
     statements: Statements
     admitted_knowledge_id: Text
     effects: tuple[PresentEffect, ...]
+
+
+class Topic(Definition):
+    """A fixed question. Asking records the NPC's fixed answer as unverified testimony."""
+
+    id: Text
+    npc_id: Text
+    label: Text
+    reply: Text
+    knowledge_id: Text
+
+
+class Contradiction(Definition):
+    """A preset pairing of an NPC's recorded testimony with the evidence that refutes it."""
+
+    id: Text
+    npc_id: Text
+    knowledge_id: Text
+    evidence_id: Text
+    pressure: Annotated[int, Field(ge=0, le=100)]
+    trust: Delta
+    reply: Text
+    explanation: Text
+
+
+class Interrogation(Definition):
+    """Costs of irrelevant moves, and the fixed topics and contradictions of the slice."""
+
+    irrelevant_trust: Annotated[int, Field(ge=-100, le=0)]
+    evade_after: Annotated[int, Field(ge=1, le=10)]
+    irrelevant_reply: Text
+    evade_reply: Text
+    topics: tuple[Topic, ...]
+    contradictions: tuple[Contradiction, ...]
 
 
 class Truth(Definition):
@@ -134,7 +169,7 @@ class Scoring(Definition):
 
 
 class Case(Definition):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     scope: Literal["week_one_slice"]
     case_id: Text
     version: Text
@@ -151,6 +186,7 @@ class Case(Definition):
     evidence: tuple[Evidence, ...]
     knowledge: tuple[Knowledge, ...]
     lie: Lie
+    interrogation: Interrogation
     truth: Truth
     scoring: Scoring
 
@@ -176,6 +212,8 @@ class NPCState:
     trust: int
     lie_stage: LieStage = LieStage.UNBROKEN
     presented: frozenset[str] = frozenset()
+    # Consecutive irrelevant moves in the current interrogation; leaving resets it.
+    irrelevant_streak: int = 0
 
 
 @dataclass(frozen=True)

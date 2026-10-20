@@ -233,14 +233,15 @@ R/F 已冻结调查数据与判定。API 没有将结案局恢复为调查、修
 | `InvestigationResult` | `scene_id`、`action_id`、`outcome: PlayerOutcome` |
 | `EvidenceView` | `evidence_id`、`name`、`kind`、`content`、`source: PublicSource`、`credibility`、`discovered_at`、`key_badge: boolean`、`known_conflicts: InformationRef[]`、`links: EvidenceLinkView[]` |
 | `EvidenceLinkView` | `link_id`、`from_evidence_id`、`to_evidence_id`、`relation: SUPPORTS/CONTRADICTS/CORROBORATES`、`description`；两端均持有且关联已披露 |
-| `NpcView` | `npc_id`、`name`、`public_identity`、`is_contactable`、`is_active`、`emotion`、`admission_progress`、`display_state`、`known_statements: KnownInformation[]` |
+| `NpcView` | `npc_id`、`name`、`public_identity`、`is_contactable`、`is_active`、`is_evading`、`emotion`、`admission_progress`、`display_state`、`known_statements: KnownInformation[]`、`topics: TopicView[]` |
+| `TopicView` | `topic_id`、`label`、`asked`；只列本角色的预设话题，标签不剧透回答 |
 | `KnownInformation` | `information_ref`、`content`、`assertion_kind`、`source`、`credibility`、`discovered_at`、`known_conflicts`；仅本局已登记且允许玩家查看的条目 |
 | `PublicSource` | `kind: SCENE/NPC/EVIDENCE/PUBLIC`、`id: string\|null`、`label`；只引用已公开来源，不能暴露隐藏对象或规则 |
 | `InformationRef` | `kind: EVIDENCE/KNOWLEDGE/RELATIONSHIP/TIMELINE_EVENT/EVIDENCE_LINK`、`id`；只输出已知目标 |
 
 `kind` 的证据枚举沿用 `PHYSICAL / DOCUMENT / TESTIMONY / DIGITAL`；可信度沿用 `UNVERIFIED / VERIFIED / DISPUTED / REFUTED`；`assertion_kind` 为 `FACT / TESTIMONY`。`key_badge` 只有案件允许展示且确属关键证据时为 true；不返回内部 `is_key_internal`。
 
-NPC 情绪为 `CALM / DEFENSIVE / NERVOUS / PRESSURED`，承认进度为 `NONE / PARTIAL_CONFESSION / CONFESSION`，`display_state` 按第 05 篇派生。公开接口不返回精确 pressure、trust、阈值、未解锁层数、链 ID、反证条件或未来说法；完整交代标签不代表该 NPC 有罪。
+NPC 情绪为 `CALM / DEFENSIVE / NERVOUS / PRESSURED`，承认进度为 `NONE / PARTIAL_CONFESSION / CONFESSION`，`display_state` 按第 05 篇派生；当前审讯的角色回避时 `is_evading=true`、`display_state=EVADING`。公开接口不返回精确 pressure、trust、阈值、未解锁层数、链 ID、反证条件或未来说法；完整交代标签不代表该 NPC 有罪。
 
 场景集合仅返回已开放场景；NPC 集合仅返回玩家已知人物。已知但暂不可接触的 NPC 可以保留公开档案，`is_contactable=false`。未持有与不存在的证据详情统一返回 `404 EVIDENCE_NOT_FOUND`，不借错误响应暴露隐藏证据名称。
 
@@ -250,7 +251,7 @@ NPC 情绪为 `CALM / DEFENSIVE / NERVOUS / PRESSURED`，承认进度为 `NONE /
 
 | 字段 | 类型与含义 |
 | --- | --- |
-| `reason_code` | `PROGRESS_UPDATED`、`NO_NEW_INFORMATION`、`ALREADY_COMPLETED`、`EVIDENCE_RECORDED` 等公开反馈，不是隐藏规则失败节点 |
+| `reason_code` | `PROGRESS_UPDATED`、`NO_NEW_INFORMATION`、`ALREADY_COMPLETED`、`EVIDENCE_RECORDED`、`TESTIMONY_RECORDED`、`CONTRADICTION_CONFIRMED`、`IRRELEVANT_MOVE`、`NPC_EVADING` 等公开反馈，不是隐藏规则失败节点 |
 | `summary` | 程序产生的固定反馈，不取自模型回复 |
 | `new_evidence`、`updated_evidence` | 新获得、可信度或公开关联变化的 EvidenceView 数组，允许为空 |
 | `disclosed_information` | 本次新披露的 KnownInformation，含固定承认证词；不保证每份证词都是事实 |
@@ -328,6 +329,8 @@ NPC 情绪为 `CALM / DEFENSIVE / NERVOUS / PRESSURED`，承认进度为 `NONE /
 | `InvestigateRequest` | `action_id: string` | 动作 ID 在 URL 的 scene_id 内存在；不能用其他场景同名动作替代 |
 | `ChatRequest` | `message: string` | 只表示玩家文本；不自动解析成证据出示、情绪操作或阶段转换 |
 | `PresentEvidenceRequest` | `evidence_id: string`、`comment: string = ""` | 检查本局持有；每次一条证据；附言不产生规则效果 |
+| `AskTopicRequest` | `topic_id: string` | 话题属于当前审讯的角色；回答登记为该角色的未核验证词，重复追问为 NOOP |
+| `PointContradictionRequest` | `knowledge_id: string`、`evidence_id: string` | 证词必须是本局已记录的该角色证词，证据必须持有；只按预设矛盾表判定，不成立按无关出示计 |
 | `SaveAccusationDraftRequest` | `content: AccusationContent` | 全量替换，所有 content 字段都必须出现；允许相应空值 |
 | `SubmitAccusationRequest` | `content: AccusationContent`、`confirm: boolean = false` | 提交完整内容快照，不默默使用可能过期的草稿；业务校验要求 confirm=true，否则 CONFIRMATION_REQUIRED |
 | `EmptyRequest` | `{}` | 进入指控准备、标记复盘完成、回复重试使用；不存在客户端 target_phase |
@@ -536,7 +539,7 @@ Origin: https://game.example
 | 409 | `REPLY_RETRY_NOT_ALLOWED` | 原轮成功、失效、来源版本改变或生成策略禁止重试 |
 | 409 | `ACCUSATION_ALREADY_SUBMITTED` | 新请求企图再次正式指控 |
 | 409 | `REVIEW_NOT_AVAILABLE` | 尚未结案，请求正式指控或完整复盘 |
-| 409 | `SAVE_VERSION_UNSUPPORTED` | 定义、规则执行或快照版本不兼容；保留存档，由服务端升级处理 |
+| 409 | `SAVE_VERSION_UNSUPPORTED` | 定义、规则执行或快照版本不兼容；保留存档，由服务端升级处理。`details` 含 `session_id`、`state_version`，客户端可在玩家确认后据此开新局替换当前存档 |
 | 413 | `PAYLOAD_TOO_LARGE` | 请求体超过 64 KiB |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | 有请求体但不是约定的 JSON 类型 |
 | 422 | `VALIDATION_ERROR` | 字段缺失、未知字段、错误类型、格式、长度、重复集合或无效分页参数 |
@@ -616,7 +619,7 @@ Origin: https://game.example
 
 P/R/W/C 的全部 HTTP 与错误码见第 9.1 节，并入各行契约；Status code 列中的组名表示继承该组错误状态，不是额外状态码。表中 Request 的 `—` 表示无请求体，`V` 表示必须带 `X-Expected-State-Version`，`K` 表示必须带 `Idempotency-Key`。所有非访问者初始化写入都带 K，所有已有会话写入都带 V。
 
-`View<T>`、`ActionResult<T>` 和各 DTO 的准确字段见第 2～6 节。`PhaseResult` 为 `SessionSummary`；`DraftResult` 为 `{content: AccusationContent}`；`ChatReceipt` 为 `{conversation_id: UUID}`；`RetryReceipt` 同样只含原 conversation_id。查询形式 `View<{items:T[]}>` 不分页，只有 ConversationPage 使用轮次分页。
+`View<T>`、`ActionResult<T>` 和各 DTO 的准确字段见第 2～6 节。`PhaseResult` 为 `SessionSummary`；`DraftResult` 为 `{content: AccusationContent}`；`ChatReceipt` 为 `{conversation_id: UUID}`；`RetryReceipt` 同样只含原 conversation_id。`QuestionResult` 为 `{npc_id, topic_id, fixed_reply, outcome}`；`ContradictionResult` 为 `{npc_id, knowledge_id, evidence_id, fixed_reply, outcome}`。查询形式 `View<{items:T[]}>` 不分页，只有 ConversationPage 使用轮次分页。
 
 | 业务能力 | HTTP Method | Path | Request | Response | Status code | Error code | 合法状态 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -641,6 +644,8 @@ P/R/W/C 的全部 HTTP 与错误码见第 9.1 节，并入各行契约；Status 
 | 查询一轮回复 | GET | `/api/v1/sessions/{session_id}/conversations/{conversation_id}` | Path session_id、conversation_id | View&lt;ConversationView&gt; | 200；R、404 | R；CONVERSATION_NOT_FOUND | S |
 | 显式重试 NPC 回复 | POST | `/api/v1/sessions/{session_id}/conversations/{conversation_id}/reply-retries` | K、V；`{}` | ActionResult&lt;RetryReceipt&gt;，关联原轮最新状态 | 201；W、404、409、429 | W；CONVERSATION_NOT_FOUND、REPLY_RETRY_NOT_ALLOWED、ACTIVE_NPC_MISMATCH、GENERATION_BUSY、GENERATION_BUDGET_EXHAUSTED | T；原轮仍可重试 |
 | 向 NPC 出示证据 | POST | `/api/v1/sessions/{session_id}/npcs/{npc_id}/evidence-presentations` | K、V；PresentEvidenceRequest | ActionResult&lt;PresentationResult&gt;，附固定披露与 ConversationView | 201；W、404、409、422 | W；NPC_NOT_FOUND、NPC_UNAVAILABLE、ACTIVE_NPC_MISMATCH、EVIDENCE_NOT_OWNED、GENERATION_BUSY | T，当前 NPC |
+| 追问预设话题 | POST | `/api/v1/sessions/{session_id}/npcs/{npc_id}/questions` | K、V；AskTopicRequest | ActionResult&lt;QuestionResult&gt;，附新登记的证词 | 201；W、404、409、422 | W；NPC_NOT_FOUND、NPC_UNAVAILABLE、ACTIVE_NPC_MISMATCH、INVALID_ACTION_REFERENCE | T，当前 NPC |
+| 指出证词与证据的矛盾 | POST | `/api/v1/sessions/{session_id}/npcs/{npc_id}/contradictions` | K、V；PointContradictionRequest | ActionResult&lt;ContradictionResult&gt; | 201；W、404、409、422 | W；NPC_NOT_FOUND、NPC_UNAVAILABLE、ACTIVE_NPC_MISMATCH、INVALID_ACTION_REFERENCE、EVIDENCE_NOT_OWNED | T，当前 NPC |
 | 查看人物关系图 | GET | `/api/v1/sessions/{session_id}/relationships` | Path session_id | View&lt;RelationshipGraph&gt; | 200；R | R | S，仅已知节点与边 |
 | 查看案件时间线 | GET | `/api/v1/sessions/{session_id}/timeline` | Path session_id | View&lt;TimelineView&gt; | 200；R | R | S，仅已知事件 |
 | 进入指控准备 | PUT | `/api/v1/sessions/{session_id}/accusation-preparation` | K、V；`{}` | ActionResult&lt;PhaseResult&gt; | 201 进入 / 200 已在 A；W | W | I、D、T、A |

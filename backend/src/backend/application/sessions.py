@@ -15,9 +15,10 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.application import views
-from backend.application.catalog import CaseCatalog
+from backend.application.catalog import CaseCatalog, is_supported
 from backend.application.errors import ApiProblem
 from backend.domain import rules
+from backend.domain.evidence import current_statement
 from backend.domain.models import (
     Accusation,
     Case,
@@ -27,7 +28,7 @@ from backend.domain.models import (
     Phase,
     StepEvidenceLink,
 )
-from backend.domain.state_machine import guard, transition
+from backend.domain.state_machine import evading, guard, transition
 from backend.infrastructure.database.models import ActionRequest, CaseTemplate, Visitor
 from backend.infrastructure.database.repositories.case_repository import CaseRepository
 from backend.infrastructure.database.repositories.session_repository import (
@@ -146,6 +147,7 @@ class GameService:
                         "synopsis": t.synopsis,
                     }
                     for t in CaseRepository(db).list_published()
+                    if is_supported(t)
                 ]
             }
 
@@ -155,6 +157,13 @@ class GameService:
         if row is None:
             raise ApiProblem("SESSION_NOT_FOUND", "找不到该游戏存档。")
         template = repository.template(row)
+        if not is_supported(template):
+            # Kept as stored; the details let the client offer a new game that replaces it.
+            raise ApiProblem(
+                "SAVE_VERSION_UNSUPPORTED",
+                "当前版本暂时无法读取此存档。存档已保留，可以返回大厅开始新的一局。",
+                {"session_id": str(row.session_id), "state_version": row.state_version},
+            )
         case = self._catalog.load(db, template)
         return repository, row, template, case, repository.load(row, case)
 
@@ -318,7 +327,7 @@ class GameService:
                 template = CaseRepository(db).find(case_id, case_version)
                 if template is None or template.status == "DRAFT":
                     raise ApiProblem("CASE_NOT_FOUND", "没有可开始的案件版本。")
-                if template.status != "PUBLISHED":
+                if template.status != "PUBLISHED" or not is_supported(template):
                     raise ApiProblem("CASE_UNAVAILABLE", "该案件版本已下架，请重新选择。")
             except ApiProblem as problem:
                 return self._reject(repository, request, problem)
@@ -423,6 +432,7 @@ class GameService:
             "completed_action_ids": sorted(after.completed_actions - before.completed_actions),
             "pressure": [before.npc.pressure, after.npc.pressure],
             "trust": [before.npc.trust, after.npc.trust],
+            "irrelevant_streak": [before.npc.irrelevant_streak, after.npc.irrelevant_streak],
             "lie_stage": [before.npc.lie_stage.value, after.npc.lie_stage.value],
             "disclosed_knowledge_ids": sorted(
                 after.disclosed_knowledge - before.disclosed_knowledge
@@ -509,12 +519,74 @@ class GameService:
             self._check_npc(case, npc_id)
             if saved.state.active_npc_id != npc_id:
                 raise ApiProblem("ACTIVE_NPC_MISMATCH", "只能与当前审讯的角色对话。")
-            reply = views.fixed_statement(case, saved.state.npc.lie_stage)
+            reply = current_statement(case, saved.state.npc)
             return Decision(
                 saved.state, "CHAT", lambda *_: {"npc_id": npc_id, "fixed_reply": reply}
             )
 
         return self._execute(visitor_id, session_id, command, "CHAT", handler)
+
+    @staticmethod
+    def _cost_outcome(case: Case, before: SavedGame, done: SavedGame, label: str) -> tuple:
+        """Wording for an irrelevant move. Costs are described, never shown as numbers."""
+        name = case.npc.name
+        if evading(case, done.state.npc):
+            summary = f"{label}连续的无关操作让{name}开始回避；结束审讯后再来。"
+            return "NPC_EVADING", summary, case.interrogation.evade_reply
+        if done.state.npc.trust < before.state.npc.trust:
+            label = f"{label}{name}对你更戒备了。"
+        return "IRRELEVANT_MOVE", label, case.interrogation.irrelevant_reply
+
+    @staticmethod
+    def _evading_outcome(case: Case) -> tuple:
+        summary = f"{case.npc.name}在回避，暂时问不出什么；结束审讯后再来。"
+        return "NPC_EVADING", summary, case.interrogation.evade_reply
+
+    @staticmethod
+    def _interrogation_data(case: Case, done: SavedGame, before: SavedGame, outcome: tuple):
+        reason, summary, reply = outcome
+        disclosed = sorted(done.state.disclosed_knowledge - before.state.disclosed_knowledge)
+        return reply, {
+            "reason_code": reason,
+            "summary": summary,
+            "new_evidence": [],
+            "disclosed_information": [views.known_information(case, done, k) for k in disclosed],
+            "npc": views.npc_view(case, done),
+        }
+
+    def ask_topic(self, visitor_id, session_id, command: Command, npc_id: str, topic_id: str):
+        def handler(case: Case, saved: SavedGame) -> Decision:
+            guard(saved.state, "topic")
+            self._check_npc(case, npc_id)
+            after = rules.ask_topic(case, saved.state, npc_id, topic_id)
+
+            def data(before: SavedGame, done: SavedGame, _template) -> dict:
+                topic = next(t for t in case.interrogation.topics if t.id == topic_id)
+                if evading(case, before.state.npc):
+                    outcome = self._evading_outcome(case)
+                elif topic.knowledge_id in before.state.disclosed_knowledge:
+                    summary = "这个问题已经问过，证词仍在记录中。"
+                    outcome = ("TOPIC_ALREADY_ASKED", summary, topic.reply)
+                else:
+                    summary = "证词已记录（未经核验）。"
+                    outcome = ("TESTIMONY_RECORDED", summary, topic.reply)
+                reply, result = self._interrogation_data(case, done, before, outcome)
+                return {
+                    "npc_id": npc_id,
+                    "topic_id": topic_id,
+                    "fixed_reply": reply,
+                    "outcome": result,
+                }
+
+            return Decision(
+                after,
+                "ASK_TOPIC",
+                data,
+                target_character_id=npc_id,
+                input_json={"npc_id": npc_id, "topic_id": topic_id},
+            )
+
+        return self._execute(visitor_id, session_id, command, "ASK_TOPIC", handler)
 
     def present(self, visitor_id, session_id, command: Command, npc_id: str, evidence_id: str):
         def handler(case: Case, saved: SavedGame) -> Decision:
@@ -524,30 +596,27 @@ class GameService:
 
             def data(before: SavedGame, done: SavedGame, _template) -> dict:
                 old_stage, new_stage = before.state.npc.lie_stage, done.state.npc.lie_stage
-                if new_stage != old_stage and new_stage == LieStage.ADMITTED:
-                    reason, summary = "ADMISSION_RECORDED", "承认已记录（未经独立核验的证词）。"
+                reply = current_statement(case, done.state.npc)
+                if evading(case, before.state.npc):
+                    outcome = self._evading_outcome(case)
+                elif evidence_id not in rules.relevant_evidence(case, npc_id):
+                    label = f"这份材料和{case.npc.name}现在的说法无关。"
+                    outcome = self._cost_outcome(case, before, done, label)
+                elif new_stage != old_stage and new_stage == LieStage.ADMITTED:
+                    summary = "承认已记录（未经独立核验的证词）。"
+                    outcome = ("ADMISSION_RECORDED", summary, reply)
                 elif new_stage != old_stage:
-                    reason, summary = "LIE_BROKEN", "谎言已击破。"
-                elif done.state.version != before.state.version:
-                    reason, summary = "EVIDENCE_RECORDED", "出示已记录。"
+                    outcome = ("LIE_BROKEN", "谎言已击破。", reply)
+                elif evidence_id in before.state.npc.presented:
+                    outcome = ("ALREADY_PRESENTED", "已经出示过，未重复增加收益。", reply)
                 else:
-                    reason, summary = "ALREADY_PRESENTED", "已经出示过，未重复增加收益。"
-                disclosed = sorted(
-                    done.state.disclosed_knowledge - before.state.disclosed_knowledge
-                )
+                    outcome = ("EVIDENCE_RECORDED", "出示已记录。", reply)
+                reply, result = self._interrogation_data(case, done, before, outcome)
                 return {
                     "npc_id": npc_id,
                     "evidence_id": evidence_id,
-                    "fixed_reply": views.fixed_statement(case, new_stage),
-                    "outcome": {
-                        "reason_code": reason,
-                        "summary": summary,
-                        "new_evidence": [],
-                        "disclosed_information": [
-                            views.known_information(case, done, k) for k in disclosed
-                        ],
-                        "npc": views.npc_view(case, done),
-                    },
+                    "fixed_reply": reply,
+                    "outcome": result,
                 }
 
             return Decision(
@@ -560,6 +629,55 @@ class GameService:
             )
 
         return self._execute(visitor_id, session_id, command, "PRESENT_EVIDENCE", handler)
+
+    def point_contradiction(
+        self,
+        visitor_id,
+        session_id,
+        command: Command,
+        npc_id: str,
+        knowledge_id: str,
+        evidence_id: str,
+    ):
+        def handler(case: Case, saved: SavedGame) -> Decision:
+            guard(saved.state, "contradict")
+            self._check_npc(case, npc_id)
+            after = rules.contradict(case, saved.state, npc_id, knowledge_id, evidence_id)
+
+            def data(before: SavedGame, done: SavedGame, _template) -> dict:
+                match = rules.find_contradiction(case, npc_id, knowledge_id, evidence_id)
+                if evading(case, before.state.npc):
+                    outcome = self._evading_outcome(case)
+                elif match is None:
+                    outcome = self._cost_outcome(case, before, done, "这两项之间看不出矛盾。")
+                elif done.state.consumed_effects == before.state.consumed_effects:
+                    summary = "这个矛盾已经指出过，不会重复产生效果。"
+                    outcome = ("CONTRADICTION_ALREADY_POINTED", summary, match.reply)
+                else:
+                    summary = f"矛盾成立：{match.explanation}"
+                    outcome = ("CONTRADICTION_CONFIRMED", summary, match.reply)
+                reply, result = self._interrogation_data(case, done, before, outcome)
+                return {
+                    "npc_id": npc_id,
+                    "knowledge_id": knowledge_id,
+                    "evidence_id": evidence_id,
+                    "fixed_reply": reply,
+                    "outcome": result,
+                }
+
+            return Decision(
+                after,
+                "POINT_CONTRADICTION",
+                data,
+                target_character_id=npc_id,
+                input_json={
+                    "npc_id": npc_id,
+                    "knowledge_id": knowledge_id,
+                    "evidence_id": evidence_id,
+                },
+            )
+
+        return self._execute(visitor_id, session_id, command, "POINT_CONTRADICTION", handler)
 
     def open_accusation(self, visitor_id, session_id, command: Command):
         def handler(case: Case, saved: SavedGame) -> Decision:

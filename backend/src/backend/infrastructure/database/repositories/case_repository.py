@@ -81,7 +81,8 @@ class CaseRepository:
                 "present_effects": [
                     {"lie_rule_id": case.lie.id, **effect.model_dump(mode="json")}
                     for effect in case.lie.effects
-                ]
+                ],
+                "interrogation": case.interrogation.model_dump(mode="json"),
             },
             public_knowledge_json=[
                 k.model_dump(mode="json") for k in case.knowledge if k.disclosure == "PUBLIC"
@@ -149,6 +150,7 @@ class CaseRepository:
                     known_by_json=list(knowledge.known_by),
                     assertion_kind="TESTIMONY",
                     initial_credibility="UNVERIFIED",
+                    disclosure=knowledge.disclosure,
                 )
             )
         self._db.flush()
@@ -233,7 +235,7 @@ class CaseRepository:
                 "id": s.secret_id,
                 "content": s.content,
                 "known_by": s.known_by_json,
-                "disclosure": "ADMITTED",
+                "disclosure": s.disclosure,
             }
             for s in secrets
         ]
@@ -285,6 +287,7 @@ class CaseRepository:
                 "admitted_knowledge_id": lie.on_admitted_json["knowledge_id"],
                 "effects": effects,
             },
+            "interrogation": template.rules_json["interrogation"],
             "truth": template.truth_json,
             "scoring": template.scoring_policy_json,
         }
