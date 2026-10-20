@@ -8,7 +8,7 @@ import pytest
 from backend.application.case import load_case
 from backend.application.game import Game
 from backend.domain.models import Accusation, GameError, GameState, LieStage, NPCState, Phase
-from backend.domain.rules import contradict, present, relevant_evidence
+from backend.domain.rules import contradict, present, present_outcome, relevant_evidence
 from backend.domain.state_machine import emotion, transition
 
 pytestmark = [pytest.mark.unit, pytest.mark.rule]
@@ -228,6 +228,24 @@ def test_irrelevant_presentations_cost_trust_once_and_two_in_a_row_cause_evasion
     game.talk("NPC01")
     assert "承认" in game.present("NPC01", "E03")
     assert game.state.npc.lie_stage == LieStage.ADMITTED
+
+
+def test_presentation_outcomes_tell_a_new_evasion_from_an_ongoing_one(game):
+    interrogating(game)
+    case = load_case()
+    codes, texts = [], []
+    for evidence_id in ("E03", "E03", "E02", "E02", "E01"):
+        before = game.state
+        texts.append(game.present("NPC01", evidence_id))
+        codes.append(present_outcome(case, before, game.state, "NPC01", evidence_id))
+    assert codes == [
+        "EVIDENCE_RECORDED",
+        "ALREADY_PRESENTED",
+        "IRRELEVANT_MOVE",
+        "EVASION_STARTED",
+        "NPC_EVADING",
+    ]
+    assert "开始回避" in texts[3] and texts[4].startswith("沈砚在回避")
 
 
 def test_topic_records_the_fixed_answer_as_testimony_without_numbers(game):

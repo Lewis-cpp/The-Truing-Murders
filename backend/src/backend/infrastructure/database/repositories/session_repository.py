@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.domain.evidence import fixed_review
 from backend.domain.models import (
     Accusation,
     Case,
@@ -83,14 +84,6 @@ def comparable(state: GameState) -> GameState:
         deep_unlocked=state.deep_unlocked,
         verdict=state.verdict,
     )
-
-
-def fixed_review(case: Case, verdict: Verdict) -> str:
-    lines = [f"结案：{verdict.category} · {verdict.score}/100"]
-    lines.extend(f"{c.label} {c.points}/{c.maximum}：{c.explanation}" for c in verdict.criteria)
-    lines.extend(["案情复盘", case.truth.explanation])
-    lines.append("复盘不会补发遗漏证据，证词与调查记录已经冻结。")
-    return "\n".join(lines)
 
 
 class SessionRepository:

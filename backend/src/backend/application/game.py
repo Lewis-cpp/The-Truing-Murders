@@ -2,13 +2,19 @@ from dataclasses import replace
 
 from backend.application.case import validate_case
 from backend.domain import rules
-from backend.domain.evidence import npc_view, player_view, validate_accusation
+from backend.domain.evidence import (
+    current_statement,
+    fixed_review,
+    npc_view,
+    outcome_text,
+    player_view,
+    validate_accusation,
+)
 from backend.domain.models import (
     Accusation,
     Case,
     GameError,
     GameState,
-    LieStage,
     NPCState,
     Phase,
 )
@@ -72,15 +78,11 @@ class Game:
         before = self._state
         npc_id = before.active_npc_id or ""
         self._commit(rules.ask_topic(self._case, before, npc_id, topic_id), f"topic:{topic_id}")
-        if evading(self._case, before.npc):
-            return self._evading()
         topic = next(t for t in self._case.interrogation.topics if t.id == topic_id)
-        label = (
-            "这个问题已经问过，证词仍在记录中。"
-            if topic.knowledge_id in before.disclosed_knowledge
-            else f"证词已记录（未经核验），编号 {topic.knowledge_id}。"
-        )
-        return f"{label}\n{topic.reply}"
+        code = rules.topic_outcome(self._case, before, topic.knowledge_id)
+        if code == "TESTIMONY_RECORDED":
+            return f"证词已记录（未经核验），编号 {topic.knowledge_id}。\n{topic.reply}"
+        return self._say(code, before, "", topic.reply)
 
     def present(self, npc_id: str, evidence_id: str) -> str:
         before = self._state
@@ -88,24 +90,9 @@ class Game:
             rules.present(self._case, before, npc_id, evidence_id),
             f"present:{npc_id}:{evidence_id}",
         )
-        if evading(self._case, before.npc):
-            return self._evading()
-        if evidence_id not in rules.relevant_evidence(self._case, npc_id):
-            return self._irrelevant(before, f"这份材料和{self._case.npc.name}现在的说法无关。")
-        reply = npc_view(self._case, self._state, npc_id)["statement"]
-        if before.npc.lie_stage != self._state.npc.lie_stage:
-            label = (
-                "承认已记录（未经独立核验的证词）"
-                if self._state.npc.lie_stage == LieStage.ADMITTED
-                else "谎言已击破"
-            )
-            return f"{label}。\n{reply}"
-        prefix = (
-            "已经出示过，未重复增加收益。"
-            if evidence_id in before.npc.presented
-            else "出示已记录。"
-        )
-        return f"{prefix}\n{reply}"
+        code = rules.present_outcome(self._case, before, self._state, npc_id, evidence_id)
+        label = f"这份材料和{self._case.npc.name}现在的说法无关。"
+        return self._say(code, before, label, current_statement(self._case, self._state.npc))
 
     def contradict(self, knowledge_id: str, evidence_id: str) -> str:
         before = self._state
@@ -114,28 +101,17 @@ class Game:
             rules.contradict(self._case, before, npc_id, knowledge_id, evidence_id),
             f"contradict:{knowledge_id}:{evidence_id}",
         )
-        if evading(self._case, before.npc):
-            return self._evading()
         match = rules.find_contradiction(self._case, npc_id, knowledge_id, evidence_id)
+        code = rules.contradiction_outcome(self._case, before, self._state, match is not None)
         if match is None:
-            return self._irrelevant(before, "这两项之间看不出矛盾。")
-        if self._state.consumed_effects == before.consumed_effects:
-            return f"这个矛盾已经指出过，不会重复产生效果。\n{match.reply}"
-        return f"矛盾成立：{match.explanation}\n{match.reply}"
+            return self._say(code, before, "这两项之间看不出矛盾。", "")
+        return self._say(code, before, f"矛盾成立：{match.explanation}", match.reply)
 
-    def _irrelevant(self, before: GameState, label: str) -> str:
-        """Costs are shown in words only; the numbers stay hidden from the player."""
-        policy, name = self._case.interrogation, self._case.npc.name
-        if evading(self._case, self._state.npc):
-            label += f"连续的无关操作让{name}开始回避；back 结束审讯后再来。"
-            return f"{label}\n{policy.evade_reply}"
-        if self._state.npc.trust < before.npc.trust:
-            label += f"{name}对你更戒备了。"
-        return f"{label}\n{policy.irrelevant_reply}"
-
-    def _evading(self) -> str:
-        reply = self._case.interrogation.evade_reply
-        return f"{self._case.npc.name}在回避，暂时问不出什么；back 结束审讯后再来。\n{reply}"
+    def _say(self, code: str, before: GameState, label: str, reply: str) -> str:
+        _, summary, reply = outcome_text(
+            self._case, code, before, self._state, label, reply, leave="back 结束审讯"
+        )
+        return f"{summary}\n{reply}"
 
     def back(self) -> None:
         self._commit(transition(self._state, "back"), "back")
@@ -153,12 +129,7 @@ class Game:
     def review(self) -> str:
         if self._state.phase not in {Phase.REVIEW, Phase.FINISHED} or self._state.verdict is None:
             raise GameError("正式结案后才能查看复盘。")
-        verdict = self._state.verdict
-        lines = [f"结案：{verdict.category} · {verdict.score}/100"]
-        lines.extend(f"{c.label} {c.points}/{c.maximum}：{c.explanation}" for c in verdict.criteria)
-        lines.extend(["案情复盘", self._case.truth.explanation])
-        lines.append("复盘不会补发遗漏证据，证词与调查记录已经冻结。")
-        return "\n".join(lines)
+        return fixed_review(self._case, self._state.verdict)
 
     def finish(self) -> None:
         self._commit(transition(self._state, "finish"), "finish")
