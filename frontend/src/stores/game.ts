@@ -103,7 +103,7 @@ export const useGameStore = defineStore('game', () => {
         await refresh().catch(() => undefined)
       }
       // The lobby warning already explains an unreadable save.
-      if (unsupported.value) error.value = null
+      if (code === 'SAVE_VERSION_UNSUPPORTED' && unsupported.value) error.value = null
     } finally {
       busy.value = false
     }
