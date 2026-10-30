@@ -5,7 +5,6 @@ from backend.domain import rules
 from backend.domain.evidence import (
     current_statement,
     fixed_review,
-    npc_view,
     outcome_text,
     player_view,
     validate_accusation,
@@ -40,19 +39,15 @@ class Game:
     def view(self) -> dict:
         return player_view(self._case, self._state)
 
-    def _commit(self, candidate: GameState, event: str) -> bool:
+    def _commit(self, candidate: GameState) -> bool:
         if candidate == self._state:
             return False
-        self._state = replace(
-            candidate,
-            version=self._state.version + 1,
-            history=(*self._state.history, event),
-        )
+        self._state = replace(candidate, version=self._state.version + 1)
         return True
 
     def inspect(self, action_id: str) -> str:
         before = self._state.evidence_ids
-        changed = self._commit(rules.investigate(self._case, self._state, action_id), action_id)
+        changed = self._commit(rules.investigate(self._case, self._state, action_id))
         if not changed:
             return "这里已经调查过，证据仍在背包中。"
         gained = self._state.evidence_ids - before
@@ -65,19 +60,19 @@ class Game:
         guard(self._state, "talk")
         if npc_id != self._case.npc.id:
             raise GameError("该角色不在本周可审讯范围内。")
-        self._commit(transition(self._state, "talk", npc_id), f"talk:{npc_id}")
-        return npc_view(self._case, self._state, npc_id)["statement"]
+        self._commit(transition(self._state, "talk", npc_id))
+        return current_statement(self._case, self._state.npc)
 
     def ask(self, text: str) -> str:
         guard(self._state, "ask")
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise GameError("请输入 1 至 4000 字的问题。")
-        return npc_view(self._case, self._state, self._case.npc.id)["statement"]
+        return current_statement(self._case, self._state.npc)
 
     def topic(self, topic_id: str) -> str:
         before = self._state
         npc_id = before.active_npc_id or ""
-        self._commit(rules.ask_topic(self._case, before, npc_id, topic_id), f"topic:{topic_id}")
+        self._commit(rules.ask_topic(self._case, before, npc_id, topic_id))
         topic = next(t for t in self._case.interrogation.topics if t.id == topic_id)
         code = rules.topic_outcome(self._case, before, topic.knowledge_id)
         if code == "TESTIMONY_RECORDED":
@@ -86,10 +81,7 @@ class Game:
 
     def present(self, npc_id: str, evidence_id: str) -> str:
         before = self._state
-        self._commit(
-            rules.present(self._case, before, npc_id, evidence_id),
-            f"present:{npc_id}:{evidence_id}",
-        )
+        self._commit(rules.present(self._case, before, npc_id, evidence_id))
         code = rules.present_outcome(self._case, before, self._state, npc_id, evidence_id)
         label = f"这份材料和{self._case.npc.name}现在的说法无关。"
         return self._say(code, before, label, current_statement(self._case, self._state.npc))
@@ -97,10 +89,7 @@ class Game:
     def contradict(self, knowledge_id: str, evidence_id: str) -> str:
         before = self._state
         npc_id = before.active_npc_id or ""
-        self._commit(
-            rules.contradict(self._case, before, npc_id, knowledge_id, evidence_id),
-            f"contradict:{knowledge_id}:{evidence_id}",
-        )
+        self._commit(rules.contradict(self._case, before, npc_id, knowledge_id, evidence_id))
         match = rules.find_contradiction(self._case, npc_id, knowledge_id, evidence_id)
         code = rules.contradiction_outcome(self._case, before, self._state, match is not None)
         if match is None:
@@ -114,13 +103,13 @@ class Game:
         return f"{summary}\n{reply}"
 
     def back(self) -> None:
-        self._commit(transition(self._state, "back"), "back")
+        self._commit(transition(self._state, "back"))
 
     def accuse(self) -> None:
-        self._commit(transition(self._state, "accuse"), "accuse")
+        self._commit(transition(self._state, "accuse"))
 
     def submit(self, accusation: Accusation) -> None:
-        self._commit(rules.judge(self._case, self._state, accusation), "submit")
+        self._commit(rules.judge(self._case, self._state, accusation))
 
     def check_accusation(self, accusation: Accusation) -> None:
         guard(self._state, "submit")
@@ -132,4 +121,4 @@ class Game:
         return fixed_review(self._case, self._state.verdict)
 
     def finish(self) -> None:
-        self._commit(transition(self._state, "finish"), "finish")
+        self._commit(transition(self._state, "finish"))
