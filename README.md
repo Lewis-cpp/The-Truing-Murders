@@ -108,7 +108,7 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 | PostgreSQL | 18；当前固定镜像为 18.6 | 开发库 `truing`、测试库 `truing_test` |
 
 Python 和前端的具体依赖版本分别固定在 `backend/uv.lock` 和 `frontend/package-lock.json`。
-前端已安装设计中使用的 Element Plus、ECharts、Pinia、Vue Router；页面与状态模块随业务开发添加。
+前端当前使用 Element Plus 与 Pinia；设计中的 ECharts 与 Vue Router 随首个使用它们的页面安装。
 数据库镜像使用摘要固定，升级补丁版本时需要显式更新 `backend/compose.yaml` 中的摘要并重新验证。
 
 本机已有 Python、Node.js 和 Docker，本次新增的 uv 位于 `~/.local/bin/uv`。
