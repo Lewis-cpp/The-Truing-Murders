@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.domain.models import Case
@@ -17,8 +17,6 @@ from backend.infrastructure.database.models import (
     LieRule,
     Scene,
 )
-
-CHILD_TABLES = (EvidenceDependency, LieRule, CharacterSecret, Evidence, Scene, Character)
 
 
 def _split_label(label: str) -> tuple[str, str]:
@@ -45,14 +43,6 @@ class CaseRepository:
                 .order_by(CaseTemplate.case_id, CaseTemplate.published_at)
             )
         )
-
-    def delete_draft(self, template: CaseTemplate) -> None:
-        if template.status != "DRAFT":
-            raise ValueError("只能删除尚未发布的草稿版本。")
-        for table in CHILD_TABLES:
-            self._db.execute(delete(table).where(table.template_id == template.template_id))
-        self._db.delete(template)
-        self._db.flush()
 
     def insert_draft(self, case: Case, rule_execution_version: str, now: datetime) -> CaseTemplate:
         template_id = uuid.uuid4()

@@ -17,11 +17,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "echarts": "^6.1.0",
     "element-plus": "^2.14.7",
     "pinia": "^4.0.3",
-    "vue": "^3.5.43",
-    "vue-router": "^4.6.4"
+    "vue": "^3.5.43"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

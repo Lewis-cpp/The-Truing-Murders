@@ -117,21 +117,3 @@ def fixed_review(case: Case, verdict: Verdict) -> str:
     lines.extend(["案情复盘", case.truth.explanation])
     lines.append("复盘不会补发遗漏证据，证词与调查记录已经冻结。")
     return "\n".join(lines)
-
-
-def npc_view(case: Case, state: GameState, npc_id: str) -> dict:
-    """Fixed dialogue projection only; no Agent or model context is created."""
-    if npc_id != case.npc.id or state.active_npc_id != npc_id:
-        raise GameError("请先进入该角色的审讯。", "ACTIVE_NPC_MISMATCH")
-    statement = current_statement(case, state.npc)
-    return {
-        "name": case.npc.name,
-        "statement": statement,
-        "knowledge": [
-            k.content
-            for k in case.knowledge
-            if npc_id in k.known_by
-            and (k.disclosure == "PUBLIC" or k.id in state.disclosed_knowledge)
-        ],
-        "presented": [e.model_dump() for e in case.evidence if e.id in state.npc.presented],
-    }

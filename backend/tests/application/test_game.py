@@ -5,7 +5,6 @@ import pytest
 
 from backend.application.case import load_case
 from backend.application.game import Game
-from backend.domain.evidence import npc_view
 from backend.domain.models import Accusation, GameError, Phase
 
 pytestmark = pytest.mark.unit
@@ -123,17 +122,20 @@ def test_knowledge_requires_disclosure_and_only_presented_material_reaches_npc(g
     for action in ("A01", "A02", "A03"):
         game.inspect(action)
     game.talk("NPC01")
-    view = npc_view(case, game.state, "NPC01")
-    assert view["presented"] == []
-    assert case.knowledge[1].content not in view["knowledge"]
+
+    def known() -> list[str]:
+        return [k["content"] for k in game.view()["knowledge"]]
+
+    assert game.state.npc.presented == frozenset()
+    assert case.knowledge[1].content not in known()
     game.present("NPC01", "E01")
-    assert [e["id"] for e in npc_view(case, game.state, "NPC01")["presented"]] == ["E01"]
-    assert len(game.view()["knowledge"]) == 1
+    assert game.state.npc.presented == {"E01"}
+    assert len(known()) == 1
     game.present("NPC01", "E03")
     assert game.view()["knowledge"][-1]["credibility"] == "UNVERIFIED"
-    assert case.knowledge[1].content in npc_view(case, game.state, "NPC01")["knowledge"]
+    assert case.knowledge[1].content in known()
     with pytest.raises(GameError):
-        npc_view(case, game.state, "NPC02")
+        game.present("NPC02", "E01")
 
 
 def test_closure_freezes_input_and_review_does_not_grant_missing_evidence(game):

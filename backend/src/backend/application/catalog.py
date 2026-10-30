@@ -39,7 +39,8 @@ def import_case(sessions: sessionmaker[Session], path: Path) -> ImportResult:
     with sessions() as db, db.begin():
         repository = CaseRepository(db)
         existing = repository.find(case.case_id, case.version)
-        if existing is not None and existing.status != "DRAFT":
+        # The draft below is published in this transaction, so a stored version is never a draft.
+        if existing is not None:
             if existing.content_hash != digest:
                 raise ValueError(
                     f"{case.case_id} {case.version} 已发布且内容不同；修订请使用新的版本号。"
@@ -47,8 +48,6 @@ def import_case(sessions: sessionmaker[Session], path: Path) -> ImportResult:
             return ImportResult(
                 str(existing.template_id), case.case_id, case.version, digest, False
             )
-        if existing is not None:
-            repository.delete_draft(existing)
         template = repository.insert_draft(case, RULE_EXECUTION_VERSION, now)
         # Publishing checks that the tables reproduce exactly the reviewed definition.
         if content_hash(repository.load_case(template)) != digest:

@@ -1,6 +1,6 @@
 """The deliberately small W1 contract; it is not the future rule DSL."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -248,7 +248,6 @@ class GameState:
     deep_unlocked: bool = False
     verdict: Verdict | None = None
     version: int = 1
-    history: tuple[str, ...] = field(default_factory=tuple)
 
 
 class GameError(ValueError):
