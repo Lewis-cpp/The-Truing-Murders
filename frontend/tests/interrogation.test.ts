@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { ElOption, ElPopconfirm, ElSelect } from 'element-plus'
 import GameView from '../src/views/GameView.vue'
+import { useGameStore } from '../src/stores/game'
 import type { KnownInformation, NpcView, SessionView } from '../src/api/types'
 import { caseSummary, json, sessionView, stubFetch } from './fixtures'
 
@@ -420,5 +421,33 @@ describe('outdated page', () => {
     expect(wrapper.find('.feedback.error').exists()).toBe(false)
     expect(button(wrapper, '出示').attributes('disabled')).toBeDefined()
     wrapper.unmount()
+  })
+
+  it('starts a fresh transcript after leaving through the accusation form', async () => {
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': views(
+        interrogation(),
+        interrogation({}, 6),
+        sessionView({ phase: 'ACCUSATION', state_version: 7 }),
+        sessionView({ state_version: 8 }),
+        interrogation({}, 9),
+      ),
+      [`POST ${session}/npcs/NPC01/conversations`]: () =>
+        json(201, result({ npc_id: 'NPC01', fixed_reply: '我一直在休息区。' })),
+      [`PUT ${session}/accusation-preparation`]: () => json(201, result({}, 7)),
+      [`DELETE ${session}/accusation-preparation`]: () => json(200, result({}, 8)),
+      [`PUT ${session}/interrogation`]: () => json(201, result({}, 9)),
+    })
+    const game = useGameStore()
+    await game.init()
+    await game.chat('NPC01', '你在哪里？')
+    expect(game.replies).toEqual(['我一直在休息区。'])
+
+    await game.openAccusation()
+    await game.cancelAccusation()
+    await game.talk('NPC01')
+    expect(game.view?.session.state_version).toBe(9)
+    expect(game.replies).toEqual([])
   })
 })

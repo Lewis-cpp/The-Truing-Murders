@@ -76,6 +76,8 @@ export const useGameStore = defineStore('game', () => {
     }
     review.value = null
     const phase = view.value?.session.phase
+    // Leaving an interrogation by any route (back, accusation, restart) ends its transcript.
+    if (phase !== 'INTERROGATION') replies.value = []
     if (phase === 'REVIEW' || phase === 'FINISHED') {
       review.value = (await get<{ data: ReviewView }>(`${base()}/review`)).data
     }
@@ -178,9 +180,6 @@ export const useGameStore = defineStore('game', () => {
           },
           version(),
         ),
-        () => {
-          replies.value = []
-        },
       ),
     investigate: (sceneId: string, actionId: string) =>
       run(
@@ -194,11 +193,7 @@ export const useGameStore = defineStore('game', () => {
       ),
     talk: (npcId: string) =>
       run(newWrite('PUT', `${base()}/interrogation`, { npc_id: npcId }, version())),
-    endTalk: () =>
-      run(newWrite('DELETE', `${base()}/interrogation`, undefined, version()), () => {
-        // Evasion ends with the interrogation, so the next one starts a fresh transcript.
-        replies.value = []
-      }),
+    endTalk: () => run(newWrite('DELETE', `${base()}/interrogation`, undefined, version())),
     chat: (npcId: string, message: string) =>
       run(
         newWrite('POST', `${base()}/npcs/${npcId}/conversations`, { message }, version()),
