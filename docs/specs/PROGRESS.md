@@ -20,33 +20,23 @@
 | v0.3 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.5 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
-| v0.6 | 是 | 否 | 否 | 否 | 否 |
+| v0.6 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. T22 关系图、时间线与指控表单契约：前端安装 `echarts`（锁文件）；`composables/relationshipGraph.ts`
-   的 `graphOption`（graph 系列，data/links 恰好等于后端投影，TESTIMONY/UNVERIFIED 虚线）与
-   `composables/timeline.ts` 的 `timelineRows`（UNKNOWN 加"时间未知："前缀、badge 已核验/证词/存疑、
-   conflicts 取标题）；组件 `relationship-graph`（SVG 渲染）始终伴随 `relationship-list` 文字列表、
-   `timeline-list` 每行带 badge 文字与冲突提示；指控表单测试契约 `option-*`/`step-*`（按勾选先后排序）/
-   `cite-check-*`/`link-*`/`accusation-explanation`；ACCUSATION 阶段 `cite-{evidence_id}` 联动；
-   复盘面板列真相步骤与 `missing_evidence_ids`。让 graph-timeline.test.ts 转绿。
-2. T23 恢复交互与演练：前端 recovery.test.ts（聊天/出示/草稿/重试回复的不确定结果先查
-   `GET /requests/{id}`，404 原键重试，三类冲突不清空表单）；修订演练 1 的测试管线 cookie 缺陷
-   （记入 docs/specs/v0.6/test-amendments.md）并确认 503 `PERSISTENCE_UNAVAILABLE` 路径；
-   备份演练本机无 pg_dump 18 则按规格 skip 并在交付记录写明手动演练命令与结果。
-3. T24 部署、E2E 与性能：`backend/Dockerfile`（slim、`uv sync --locked --no-dev`、非 root）、
-   `backend/deploy/compose.yaml`（db/api/web，nginx 挂载 dist 并反代 /api/v1/）、nginx.conf 与
-   deploy/.env.example；README"部署与备份"；后端 dev 加 `playwright`（锁文件）并按 README/CI 装
-   Chromium；`uv run pytest tests/e2e -m e2e` 跑三结局、无招供与恢复路径；性能测试 5 会话 P95 ≤ 1.0s，
-   报告写 `backend/reports/performance/`（不入库）；`docs/traceability.md`（FR-01～19、NFR-01～11）让
-   test_traceability 转绿；CI 增 e2e 任务；docs/22-v0.6-delivery.md；打 v0.6 标签、冻结新增玩法。
+1. v1.0 阶段开始（下一轮次直接执行）：从标签 `v0.6` 切分支 `feat/v1.0-<主题>`；启用
+   `docs/specs/v1.0/tests`（axe-core 前端 dev 依赖按规格加入）并立即单独提交
+   "Add v1.0 acceptance tests"；跑基线；拆任务。v1.0 范围：模型接入的可见性收口、
+   视觉与可访问性收尾、最终交付；自 v0.6 起新增玩法已冻结。
+2. 补做真实模型评测（v0.4 npc01、v0.5 four_npcs、v0.6 无新增）：配置凭据后
+   `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm`，结果计入对应交付记录与 v1.0 收尾。
+3. 远程 CI：e2e 任务已写入 ci.yml，待推送后在 GitHub Actions 上确认；本地预演已全绿。
 
 ## 阻塞与需要人处理的事项
 
-- 推送、开 PR、合并 main 未获授权：v0.3～v0.5 的本地提交与标签均待推送。
+- 推送、开 PR、合并 main 未获授权：v0.3～v0.6 的本地提交与标签均待推送。
 - 人工预期仍待真人复核：`case.json`、`full_case_verdicts.json`、`full_case_paths.json`
   （`review_status=pending_human_review`），以及 W1 遗留的 `week_one_verdicts.json` 13 组评分预期。
   不阻塞 v0.4 实现。
@@ -55,6 +45,13 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.6 · 3ab58c6..HEAD（T22～T24：图表/表单契约、恢复演练、部署、E2E 与性能）。
+  echarts 图表+时间线 composable（纯投影）、指控表单契约与全部页面 testid、恢复演练 4 项
+  （演练 1 修订 cookie 时点，记入 test-amendments）、备份演练手动执行（dump 149674B → 重建 →
+  存档一致且可继续）；Dockerfile/deploy compose/nginx 部署实测（含 alembic.ini 补 COPY、
+  浏览器开局与调查）；playwright 入 dev 组、CI 增 e2e；traceability 30 行。
+  收尾复跑：后端 518 过 0 败、e2e 4/4、性能 P95 78ms、前端 33/33。
+  交付记录 docs/22-v0.6-delivery.md；标签 v0.6 本地已打，待推送。下一步 v1.0。
 - 2026-11-02 · v0.6 · v0.5..HEAD（阶段开始：7 个验收文件入库 + pytest 切 importlib 模式）。
   基线：后端 516 过 2 败 1 跳过（演练 1 管线缺陷、traceability 未建；备份演练 skip 待 pg_dump 18；
   deselect：e2e 4、live 2、performance 1）；前端 28 过 2 败（graph-timeline、recovery）。
