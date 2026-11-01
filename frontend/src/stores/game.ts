@@ -12,6 +12,8 @@ import {
 import type {
   AccusationContent,
   CaseSummary,
+  ConversationPage,
+  ConversationView,
   CurrentSessionView,
   PlayerOutcome,
   ReviewView,
@@ -53,7 +55,7 @@ export const useGameStore = defineStore('game', () => {
   // A confirmed write whose follow-up read failed; the page needs a reload.
   const stale = ref(false)
   const pending = ref<PendingWrite | null>(null)
-  const replies = ref<string[]>([])
+  const conversations = ref<ConversationView[]>([])
 
   function base(): string {
     return `/api/v1/sessions/${view.value?.session.session_id}`
@@ -61,6 +63,21 @@ export const useGameStore = defineStore('game', () => {
 
   function version(): number | undefined {
     return view.value?.session.state_version
+  }
+
+  async function loadConversations() {
+    const npcId = view.value?.session.active_npc_id
+    if (view.value?.session.phase !== 'INTERROGATION' || !npcId) {
+      conversations.value = []
+      return
+    }
+    const page = await get<{ data: ConversationPage }>(
+      `${base()}/npcs/${npcId}/conversations?limit=20`,
+    )
+    // The API returns the newest first; the transcript reads in conversation order.
+    conversations.value = [...page.data.items].sort(
+      (left, right) => left.conversation_seq - right.conversation_seq,
+    )
   }
 
   async function refresh() {
@@ -72,15 +89,19 @@ export const useGameStore = defineStore('game', () => {
       // The server keeps the save; the lobby offers a new game that replaces it.
       if (!(caught instanceof ApiError) || caught.code !== 'SAVE_VERSION_UNSUPPORTED') throw caught
       view.value = null
+      conversations.value = []
       unsupported.value = caught.details as unknown as UnsupportedSave
+      review.value = null
+      return
     }
     review.value = null
     const phase = view.value?.session.phase
     // Leaving an interrogation by any route (back, accusation, restart) ends its transcript.
-    if (phase !== 'INTERROGATION') replies.value = []
+    if (phase !== 'INTERROGATION') conversations.value = []
     if (phase === 'REVIEW' || phase === 'FINISHED') {
       review.value = (await get<{ data: ReviewView }>(`${base()}/review`)).data
     }
+    await loadConversations()
   }
 
   async function init() {
@@ -141,7 +162,18 @@ export const useGameStore = defineStore('game', () => {
       const kind = SETBACKS.includes(data.outcome.reason_code) ? 'warning' : 'success'
       notice.value = { kind, text: data.outcome.summary }
     }
-    if (data.fixed_reply) replies.value = [...replies.value, data.fixed_reply]
+  }
+
+  function emptyDraft(): AccusationContent {
+    return {
+      suspect_character_id: null,
+      weapon_option_id: null,
+      motive_option_id: null,
+      ordered_process_step_ids: [],
+      cited_evidence_ids: [],
+      step_evidence_links: [],
+      explanation: '',
+    }
   }
 
   return {
@@ -155,7 +187,8 @@ export const useGameStore = defineStore('game', () => {
     error,
     stale,
     pending,
-    replies,
+    conversations,
+    emptyDraft,
     init,
     retry: () => pending.value && run(pending.value, summarize),
     start: (game: CaseSummary) => {
@@ -204,12 +237,12 @@ export const useGameStore = defineStore('game', () => {
         newWrite('POST', `${base()}/npcs/${npcId}/questions`, { topic_id: topicId }, version()),
         summarize,
       ),
-    present: (npcId: string, evidenceId: string) =>
+    present: (npcId: string, evidenceId: string, comment?: string) =>
       run(
         newWrite(
           'POST',
           `${base()}/npcs/${npcId}/evidence-presentations`,
-          { evidence_id: evidenceId },
+          { evidence_id: evidenceId, ...(comment ? { comment } : {}) },
           version(),
         ),
         summarize,
@@ -224,6 +257,8 @@ export const useGameStore = defineStore('game', () => {
         ),
         summarize,
       ),
+    saveDraft: (content: AccusationContent) =>
+      run(newWrite('PUT', `${base()}/accusation-draft`, { content }, version()), summarize),
     openAccusation: () => run(newWrite('PUT', `${base()}/accusation-preparation`, {}, version())),
     cancelAccusation: () =>
       run(newWrite('DELETE', `${base()}/accusation-preparation`, undefined, version())),

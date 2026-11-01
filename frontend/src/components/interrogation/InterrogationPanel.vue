@@ -16,13 +16,14 @@ const testimony = computed(() =>
     (info) => info.source.kind === 'NPC' && info.source.id === active.value?.npc_id,
   ),
 )
-const emotions: Record<string, string> = {
+const states: Record<string, string> = {
   CALM: '平静',
   DEFENSIVE: '戒备',
   NERVOUS: '紧张',
   PRESSURED: '动摇',
-  EVADING: '回避',
-  CONFESSION: '已交代（不代表有罪）',
+  EVADING: '回避中',
+  CONFESSION: '已完整承认',
+  PARTIAL_CONFESSION: '部分承认',
 }
 
 async function ask() {
@@ -38,24 +39,40 @@ function contradict() {
 </script>
 
 <template>
-  <ElCard header="审讯">
-    <div v-for="npc in game.view?.npcs" :key="npc.npc_id" class="npc">
-      <strong>{{ npc.name }}</strong> · {{ npc.public_identity }}
-      <ElTag size="small">{{ emotions[npc.display_state] ?? npc.display_state }}</ElTag>
-      <ElButton
-        v-if="!npc.is_active"
-        size="small"
-        :disabled="!actions.includes('SET_INTERROGATION') || game.busy"
-        @click="game.talk(npc.npc_id)"
+  <ElCard header="人物与审讯">
+    <ul data-testid="npc-list" class="npcs">
+      <li
+        v-for="npc in game.view?.npcs"
+        :key="npc.npc_id"
+        class="npc"
+        :data-testid="`npc-${npc.npc_id}`"
       >
-        审讯
-      </ElButton>
-    </div>
-    <template v-if="active">
+        <strong>{{ npc.name }}</strong> · {{ npc.public_identity }}
+        <ElTag size="small">{{ states[npc.display_state] ?? npc.display_state }}</ElTag>
+        <ElButton
+          v-if="!npc.is_active"
+          size="small"
+          :disabled="!actions.includes('SET_INTERROGATION') || game.busy"
+          @click="game.talk(npc.npc_id)"
+        >
+          审讯
+        </ElButton>
+      </li>
+    </ul>
+    <div v-if="active" data-testid="interrogation-panel" class="panel">
       <blockquote class="statement">{{ active.name }}：{{ active.fixed_statement }}</blockquote>
-      <p v-for="(reply, index) in game.replies" :key="index" class="reply">
-        {{ active.name }}：{{ reply }}
-      </p>
+      <div data-testid="conversation-log" class="log">
+        <article v-for="round in game.conversations" :key="round.conversation_id" class="round">
+          <p
+            v-for="message in round.messages"
+            :key="message.message_id"
+            :class="message.speaker === 'PLAYER' ? 'player' : 'npc-line'"
+          >
+            <template v-if="message.speaker === 'PLAYER'">你：{{ message.content }}</template>
+            <template v-else>{{ active.name }}：{{ message.content }}</template>
+          </p>
+        </article>
+      </div>
       <ElAlert
         v-if="active.is_evading"
         type="warning"
@@ -68,6 +85,7 @@ function contradict() {
         <ElButton
           v-for="topic in active.topics"
           :key="topic.topic_id"
+          :data-testid="`topic-${topic.topic_id}`"
           size="small"
           :disabled="game.busy || !actions.includes('ASK_TOPIC')"
           @click="game.askTopic(active.npc_id, topic.topic_id)"
@@ -76,7 +94,12 @@ function contradict() {
         </ElButton>
       </div>
       <div class="row">
-        <ElInput v-model="question" maxlength="2000" placeholder="提问（本版本只返回固定说法）" />
+        <ElInput
+          v-model="question"
+          data-testid="chat-input"
+          maxlength="2000"
+          placeholder="提问（本版本只返回固定说法）"
+        />
         <ElButton :disabled="game.busy || !question.trim()" @click="ask">提问</ElButton>
       </div>
       <div class="row">
@@ -134,6 +157,48 @@ function contradict() {
         出示无关材料或指错矛盾会让对方更戒备；接连这样做，对方会开始回避，直到你结束审讯。
       </p>
       <ElButton :disabled="game.busy" @click="game.endTalk()">结束审讯</ElButton>
-    </template>
+    </div>
   </ElCard>
 </template>
+
+<style scoped>
+.npcs {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.panel {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.log {
+  display: grid;
+  gap: 6px;
+}
+.round + .round {
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 6px;
+}
+.player {
+  color: var(--el-text-color-secondary);
+}
+.statement {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin: 0;
+}
+</style>

@@ -264,7 +264,8 @@ async function mountView() {
 }
 
 function byTestId(wrapper: VueWrapper, testId: string) {
-  return wrapper.get(`[data-testid="${testId}"]`)
+  // get() omits `exists` in its return type; the runtime object still has it.
+  return wrapper.get(`[data-testid="${testId}"]`) as unknown as ReturnType<VueWrapper['find']>
 }
 
 describe('full case page', () => {

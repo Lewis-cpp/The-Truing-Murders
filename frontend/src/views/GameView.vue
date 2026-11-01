@@ -8,6 +8,7 @@ import ScenePanel from '../components/investigation/ScenePanel.vue'
 import EvidencePanel from '../components/evidence/EvidencePanel.vue'
 import InterrogationPanel from '../components/interrogation/InterrogationPanel.vue'
 import AccusationForm from '../components/reasoning/AccusationForm.vue'
+import CaseBoard from '../components/reasoning/CaseBoard.vue'
 
 const game = useGameStore()
 const phase = computed(() => game.view?.session.phase)
@@ -37,7 +38,7 @@ onMounted(game.init)
 <template>
   <main class="game">
     <header class="top">
-      <p class="eyebrow">THE TRUING MURDERS · v0.2 固定回复版</p>
+      <p class="eyebrow">THE TRUING MURDERS · 全案固定回复版</p>
       <template v-if="game.view">
         <h1>{{ game.view.session.title }}</h1>
         <p class="meta">
@@ -58,7 +59,8 @@ onMounted(game.init)
       </template>
     </header>
 
-    <div v-if="game.error" class="feedback error">
+    <!-- In ACCUSATION the form renders the rejection itself, next to the fields it belongs to. -->
+    <div v-if="game.error && phase !== 'ACCUSATION'" class="feedback error">
       <ElAlert type="error" :title="game.error" :closable="false" show-icon>
         <ElButton v-if="game.pending" size="small" :loading="game.busy" @click="game.retry()">
           重试同一操作
@@ -113,7 +115,10 @@ onMounted(game.init)
             进入指控
           </ElButton>
         </div>
-        <EvidencePanel />
+        <div>
+          <EvidencePanel />
+          <CaseBoard />
+        </div>
       </div>
     </template>
   </main>

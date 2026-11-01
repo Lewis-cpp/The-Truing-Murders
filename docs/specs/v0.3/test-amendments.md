@@ -38,3 +38,13 @@
 - 改成：保留同一检测意图（K04 承认内容结案前不得出现），改用只存在于 K04 的更长子串
   `"用铜镇纸袭击陆衡，随后取走B17原件并翻乱档案柜"`。它不匹配任何候选标签，
   仍由 L02 承认才披露，结案复盘断言（`21:12`）不受影响。
+
+## 2026-11-02：full-case.test.ts 的 byTestId 类型标注
+
+- 修改：`byTestId` 帮助函数的返回值加 `as unknown as ReturnType<VueWrapper['find']>` 类型断言。
+- 原因：锁文件安装的 @vue/test-utils 2.5.x 中 `wrapper.get()` 的返回类型为
+  `Omit<DOMWrapper<Element>, 'exists'>`，而测试第 436 行对该结果调用 `exists()`，`npm run typecheck`
+  无法通过。运行时对象仍然带有 `exists` 方法，属于纯类型层冲突。
+- 依据：`docs/specs/v0.3/spec.md` 第 6 节要求该验收测试通过全部前端检查（含 typecheck）；
+  测试行为（get 在元素缺失时抛错）完全不变。
+- 改成：仅添加类型断言，运行时代码零变化。
