@@ -54,6 +54,9 @@ class SessionSummary(BaseModel):
     closed_at: datetime | None
     finished_at: datetime | None
     available_actions: list[str]
+    # Whether the session budget still allows a model call; the page hints at fixed
+    # replies when this turns false.
+    generation_available: bool = True
 
 
 class InvestigationOption(BaseModel):

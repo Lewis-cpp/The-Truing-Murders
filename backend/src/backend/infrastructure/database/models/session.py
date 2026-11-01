@@ -273,7 +273,35 @@ class NpcState(Base):
     trust: Mapped[int] = mapped_column(SmallInteger)
     # Consecutive irrelevant moves in the current interrogation; evasion is derived from it.
     irrelevant_streak: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    # The current authorization segment: advanced when what this person may say or see changes.
+    memory_epoch: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
     lies_json: Mapped[dict] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class NpcMemorySummary(Base):
+    """The at-most-one extractive summary cache per (session, character)."""
+
+    __tablename__ = "npc_memory_summary"
+    __table_args__ = (
+        session_fk(),
+        CheckConstraint(
+            "memory_epoch >= 0 AND summary_revision >= 0 AND covered_through_seq >= 0",
+            name="counters",
+        ),
+        CheckConstraint(
+            "summary_json IS NULL OR jsonb_typeof(summary_json) IN ('object', 'null')",
+            name="summary_json",
+        ),
+    )
+
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    character_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    memory_epoch: Mapped[int] = mapped_column(Integer)
+    summary_revision: Mapped[int] = mapped_column(Integer)
+    covered_through_seq: Mapped[int] = mapped_column(BigInteger)
+    summary_json: Mapped[dict | None] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

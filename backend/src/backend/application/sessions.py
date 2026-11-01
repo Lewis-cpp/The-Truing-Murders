@@ -19,6 +19,7 @@ from backend.application.catalog import CaseCatalog, is_supported
 from backend.application.errors import ApiProblem
 from backend.application.generation import (
     GenerationRuntime,
+    budget_payload,
     can_retry_reply,
     run_generation_task,
     usage_of,
@@ -148,6 +149,17 @@ class GameService:
     def _generation(self) -> GenerationRuntime | None:
         return self._generation_provider() if self._generation_provider else None
 
+    @staticmethod
+    def _generation_available(db, row) -> bool:
+        """Whether the frozen session budget still admits another model call."""
+        budget = row.llm_budget_json or {}
+        if not isinstance(budget, dict):
+            return True
+        calls, tokens = usage_of(db, row.session_id)
+        return calls < int(budget.get("session_call_limit", 60)) and tokens < int(
+            budget.get("session_token_limit", 200000)
+        )
+
     def _submit_task(self, response: CommandResponse) -> CommandResponse:
         if response.task is not None:
             runtime = self._generation()
@@ -228,6 +240,7 @@ class GameService:
                 saved,
                 self._is_current(db, visitor_id, row.session_id),
                 repository.pending_summaries(session_id),
+                self._generation_available(db, row),
             )
 
     def current_session(self, visitor_id: uuid.UUID) -> dict:
@@ -235,11 +248,16 @@ class GameService:
             current = db.get_one(Visitor, visitor_id).current_session_id
             if current is None:
                 return {"current_session_id": None, "session": None}
-            repository, _, template, case, saved = self._load_owned(db, visitor_id, current)
+            repository, row, template, case, saved = self._load_owned(db, visitor_id, current)
             return {
                 "current_session_id": str(current),
                 "session": views.session_view(
-                    case, template, saved, True, repository.pending_summaries(current)
+                    case,
+                    template,
+                    saved,
+                    True,
+                    repository.pending_summaries(current),
+                    self._generation_available(db, row),
                 ),
             }
 
@@ -562,7 +580,15 @@ class GameService:
             case = self._catalog.load(db, template)
             request.status = "COMMITTED"
             request.http_status = 201
-            row = repository.create(visitor, template, case, request, now)
+            runtime = self._generation()
+            row = repository.create(
+                visitor,
+                template,
+                case,
+                request,
+                now,
+                llm_budget=budget_payload(runtime.config if runtime else None),
+            )
             saved = repository.load(row, case)
             empty = replace(saved, state=replace(saved.state, version=0))
             result = self._action_result(
@@ -660,6 +686,8 @@ class GameService:
                 repository.invalidate_pending(session_id, now)
             after = repository.load(row, case)
             data = decision.data(before, after, template)
+            if isinstance(data, dict) and isinstance(data.get("session"), dict):
+                data["session"]["generation_available"] = self._generation_available(db, row)
             conversation_view = None
             task = None
             if decision.conversation is not None:

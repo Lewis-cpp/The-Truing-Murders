@@ -78,10 +78,15 @@ def validate_draft(case: Case, state: GameState, draft: AccusationDraft) -> None
     _check_links(draft.evidence_links, draft.steps, draft.cited_evidence_ids)
 
 
-def current_statement(case: Case, state: GameState, npc_id: str) -> str:
-    """What the NPC says now: the evasion line, each chain's current line, or the default."""
+def current_statement(
+    case: Case, state: GameState, npc_id: str, *, ignore_evasion: bool = False
+) -> str:
+    """What the NPC says now: the evasion line, each chain's current line, or the default.
+
+    The memory fingerprint computes this with ignore_evasion=True so that mood alone
+    never looks like an authorization change."""
     npc = state.npcs[npc_id]
-    if evading(case, npc):
+    if not ignore_evasion and evading(case, npc):
         return case.interrogation.evade_reply
     chains = [chain for chain in case.lie_chains if chain.npc_id == npc_id]
     if not chains:

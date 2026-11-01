@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import Integer, func, select
 from sqlalchemy.orm import Session
 
 from backend.domain.evidence import fixed_review
@@ -34,6 +34,7 @@ from backend.infrastructure.database.models import (
     GameEventLog,
     GameSession,
     LlmAttempt,
+    NpcMemorySummary,
     NpcState,
     PlayerEvidence,
     RuleEffect,
@@ -160,7 +161,13 @@ class SessionRepository:
         return self._db.get_one(CaseTemplate, row.template_id)
 
     def create(
-        self, visitor: Visitor, template: CaseTemplate, case: Case, action: ActionRequest, now
+        self,
+        visitor: Visitor,
+        template: CaseTemplate,
+        case: Case,
+        action: ActionRequest,
+        now,
+        llm_budget: dict | None = None,
     ) -> GameSession:
         """Insert a new independent game with its initial events and NPC rows, then switch entry."""
         row = GameSession(
@@ -171,6 +178,7 @@ class SessionRepository:
             state_version=1,
             snapshot_schema_version=SNAPSHOT_SCHEMA_VERSION,
             state_json={},
+            llm_budget_json=llm_budget,
             created_at=now,
             saved_at=now,
         )
@@ -411,8 +419,33 @@ class SessionRepository:
             row.finished_at = now
         row.state_version = version + 1
         row.saved_at = now
+        self._advance_memory_epochs(row, case, before, after, now)
         self._db.flush()
         return event
+
+    def _advance_memory_epochs(self, row: GameSession, case: Case, before, after, now) -> None:
+        """One business transaction changed the state: every interrogatable character
+        (present or not) gets a new memory segment when their authorization fingerprint
+        changed, and their cached summary is invalidated in the same transaction."""
+        from backend.application.memory import authorization_fingerprint
+
+        for character in case.characters:
+            if not character.interrogatable:
+                continue
+            if authorization_fingerprint(case, before, character.id) == authorization_fingerprint(
+                case, after, character.id
+            ):
+                continue
+            npc_row = self._db.get_one(NpcState, (row.session_id, character.id))
+            npc_row.memory_epoch += 1
+            summary_row = self._db.get(NpcMemorySummary, (row.session_id, character.id))
+            if summary_row is not None:
+                # Keep the row, bump the revision and clear content and cursor so a
+                # late writer cannot mistake the reset record for an unchanged one.
+                summary_row.summary_revision += 1
+                summary_row.summary_json = None
+                summary_row.covered_through_seq = 0
+                summary_row.updated_at = now
 
     # Conversation rounds
 
@@ -433,6 +466,7 @@ class SessionRepository:
             )
         )
         pending = pending_deadline is not None
+        npc_row = self._db.get_one(NpcState, (row.session_id, input.character_id))
         conversation = Conversation(
             conversation_id=uuid.uuid4(),
             session_id=row.session_id,
@@ -443,7 +477,8 @@ class SessionRepository:
             character_id=input.character_id,
             purpose_key=None,
             source_state_version=input.source_state_version,
-            response_plan_json={},
+            # The round is frozen into the memory segment current at accept time.
+            response_plan_json={"memory_epoch": npc_row.memory_epoch if npc_row else 0},
             fixed_reply=input.fixed_reply,
             generation_status="PREPARING" if pending else "FALLBACK",
             active_attempt_id=None,
@@ -599,8 +634,13 @@ class SessionRepository:
         )
         self._db.flush()
 
-    def history_rounds(self, session_id: uuid.UUID, character_id: str, before_seq: int) -> list:
-        """Previous terminal rounds of this person, oldest first, for the model context."""
+    def history_rounds(
+        self, session_id: uuid.UUID, character_id: str, before_seq: int, memory_epoch: int
+    ) -> list:
+        """Terminal rounds of this person in the given memory segment, oldest first.
+
+        Rounds written before this schema carried no epoch in their response plan;
+        they stay visible to the player but never re-enter a model context."""
         rows = list(
             self._db.scalars(
                 select(Conversation)
@@ -609,9 +649,11 @@ class SessionRepository:
                     Conversation.character_id == character_id,
                     Conversation.conversation_seq < before_seq,
                     Conversation.generation_status.in_(("COMPLETED", "FALLBACK")),
+                    Conversation.response_plan_json["memory_epoch"].astext.cast(Integer)
+                    == memory_epoch,
                 )
                 .order_by(Conversation.conversation_seq.desc())
-                .limit(12)
+                .limit(500)
             )
         )
         rounds = []
@@ -625,6 +667,8 @@ class SessionRepository:
             )
             player_text = next((m.content for m in messages if m.sequence_no == 1), "")
             npc_text = next((m.content for m in messages if m.sequence_no == 2), "")
+            player_id = next((m.message_id for m in messages if m.sequence_no == 1), None)
+            npc_id = next((m.message_id for m in messages if m.sequence_no == 2), None)
             from backend.application.memory import HistoryRound
 
             rounds.append(
@@ -634,9 +678,69 @@ class SessionRepository:
                     player_text=player_text,
                     npc_text=npc_text,
                     status=conversation.generation_status,
+                    memory_epoch=memory_epoch,
+                    player_message_id=str(player_id) if player_id else "",
+                    npc_message_id=str(npc_id) if npc_id else "",
                 )
             )
         return rounds
+
+    def find_memory_summary(
+        self, session_id: uuid.UUID, character_id: str
+    ) -> NpcMemorySummary | None:
+        return self._db.get(NpcMemorySummary, (session_id, character_id))
+
+    def store_memory_summary(
+        self,
+        session_id: uuid.UUID,
+        template_id: uuid.UUID,
+        character_id: str,
+        memory_epoch: int,
+        payload: dict,
+        expected_revision: int,
+        now: datetime,
+    ) -> None:
+        """Insert the first summary for this person, or replace the existing one only
+        when its revision is unchanged. A lost race is accepted: the caller already
+        holds the freshly computed summary and never retries the write."""
+        from sqlalchemy import update
+
+        existing = self.find_memory_summary(session_id, character_id)
+        if existing is None:
+            self._db.add(
+                NpcMemorySummary(
+                    session_id=session_id,
+                    template_id=template_id,
+                    character_id=character_id,
+                    memory_epoch=memory_epoch,
+                    summary_revision=1,
+                    covered_through_seq=int(payload["covered_through_seq"]),
+                    summary_json=payload,
+                    updated_at=now,
+                )
+            )
+            self._db.flush()
+            return
+        result = self._db.execute(
+            update(NpcMemorySummary)
+            .where(
+                NpcMemorySummary.session_id == session_id,
+                NpcMemorySummary.character_id == character_id,
+                NpcMemorySummary.summary_revision == expected_revision,
+            )
+            .values(
+                memory_epoch=memory_epoch,
+                summary_revision=expected_revision + 1,
+                covered_through_seq=int(payload["covered_through_seq"]),
+                summary_json=payload,
+                updated_at=now,
+            )
+        )
+        self._db.flush()
+        if result.rowcount == 0:
+            # Invalidated or replaced meanwhile; the caller keeps the fresh summary
+            # for this round only and the next round rebuilds from the row again.
+            return
 
     def conversation_attempts(self, conversation_id: uuid.UUID) -> list[LlmAttempt]:
         return list(

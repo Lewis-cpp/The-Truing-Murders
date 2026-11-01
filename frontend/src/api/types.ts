@@ -32,6 +32,7 @@ export interface SessionSummary {
   closed_at: string | null
   finished_at: string | null
   available_actions: string[]
+  generation_available?: boolean
 }
 
 export interface InvestigationOption {

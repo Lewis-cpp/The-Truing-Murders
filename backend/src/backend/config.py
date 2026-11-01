@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Model generation (v0.4 spec section 2). Disabled by default: the fixed replies
     # are used and the app behaves exactly like v0.3.
     llm_enabled: bool = False
-    llm_enabled_npcs: list[str] = ["NPC01"]
+    llm_enabled_npcs: list[str] = ["NPC01", "NPC02", "NPC03", "NPC04"]
     llm_provider: str = "openai-compatible"
     llm_base_url: str = ""
     llm_model: str = ""

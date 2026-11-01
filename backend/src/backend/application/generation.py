@@ -21,6 +21,10 @@ from backend.application.memory import (
     ContextBudget,
     ContextOverBudget,
     build_context,
+    summarize,
+    summary_from_json,
+    summary_is_valid,
+    summary_to_json,
 )
 from backend.config import Settings
 from backend.domain.models import Case, GameState, Phase
@@ -30,6 +34,7 @@ from backend.infrastructure.database.models import (
     ConversationMessage,
     GameSession,
     LlmAttempt,
+    NpcState,
     Visitor,
 )
 from backend.infrastructure.database.repositories.session_repository import SessionRepository
@@ -99,22 +104,41 @@ class GenerationRuntime:
 class ThreadDispatcher:
     """Bounded in-process dispatcher; tests replace it with a manual one."""
 
-    def __init__(self, concurrency: int):
+    def __init__(self, max_workers: int):
         from concurrent.futures import ThreadPoolExecutor
 
         self._executor = ThreadPoolExecutor(
-            max_workers=max(1, concurrency), thread_name_prefix="llm"
+            max_workers=max(1, max_workers), thread_name_prefix="llm"
         )
 
     def submit(self, task: Callable[[], None]) -> None:
         self._executor.submit(task)
 
-    def shutdown(self) -> None:
-        self._executor.shutdown(wait=False)
+    def shutdown(self, wait: bool = False) -> None:
+        self._executor.shutdown(wait=wait)
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def budget_payload(config: GenerationConfig | None) -> dict:
+    """The frozen per-game budget written at game start; spec defaults when unknown."""
+    c = config or GenerationConfig(
+        enabled_npcs=frozenset(),
+        timeout_seconds=30.0,
+        max_input_tokens=4000,
+        max_output_tokens=400,
+        call_limit=60,
+        token_limit=200000,
+    )
+    return {
+        "session_call_limit": c.call_limit,
+        "session_token_limit": c.token_limit,
+        "max_input_tokens": c.max_input_tokens,
+        "max_output_tokens": c.max_output_tokens,
+        "timeout_seconds": c.timeout_seconds,
+    }
 
 
 def budget_of(db: Session, row: GameSession) -> dict:
@@ -217,6 +241,10 @@ class _Plan:
     estimated_input_tokens: int
     max_output_tokens: int
     deadline_at: datetime
+    memory_epoch: int
+    # The rebuilt summary to cache in npc_memory_summary during the reserve step.
+    summary_write: dict | None
+    expected_revision: int
 
 
 def _build_plan(db: Session, catalog: CaseCatalog, conversation: Conversation) -> _Plan:
@@ -226,8 +254,13 @@ def _build_plan(db: Session, catalog: CaseCatalog, conversation: Conversation) -
     case = catalog.load(db, template)
     repository = SessionRepository(db)
     saved = repository.load(row, case)
+    npc_row = db.get_one(NpcState, (row.session_id, conversation.character_id))
+    memory_epoch = npc_row.memory_epoch if npc_row else 0
     history = repository.history_rounds(
-        conversation.session_id, conversation.character_id, conversation.conversation_seq
+        conversation.session_id,
+        conversation.character_id,
+        conversation.conversation_seq,
+        memory_epoch,
     )
     player_message = db.scalar(
         select(ConversationMessage.content).where(
@@ -236,6 +269,25 @@ def _build_plan(db: Session, catalog: CaseCatalog, conversation: Conversation) -
         )
     )
     budget = budget_of(db, row)
+    # The stored summary is used only when it re-derives exactly from the current
+    # messages; otherwise it is rebuilt now and cached during the reserve step.
+    summary = None
+    summary_write = None
+    expected_revision = 0
+    try:
+        summary_row = repository.find_memory_summary(row.session_id, conversation.character_id)
+    except Exception:  # noqa: BLE001 - a broken cache must not block generation
+        summary_row = None
+    if summary_row is not None:
+        expected_revision = summary_row.summary_revision
+        stored = summary_from_json(summary_row.summary_json)
+        if stored is not None and summary_is_valid(
+            stored, str(row.session_id), conversation.character_id, memory_epoch, history
+        ):
+            summary = stored
+    if summary is None:
+        summary = summarize(str(row.session_id), conversation.character_id, memory_epoch, history)
+        summary_write = summary_to_json(summary) if summary is not None else None
     context = build_context(
         case,
         saved.state,
@@ -247,6 +299,8 @@ def _build_plan(db: Session, catalog: CaseCatalog, conversation: Conversation) -
             max_input_tokens=int(budget.get("max_input_tokens", 4000)),
             max_output_tokens=int(budget.get("max_output_tokens", 400)),
         ),
+        memory_epoch=memory_epoch,
+        summary=summary,
     )
     return _Plan(
         case=case,
@@ -258,6 +312,9 @@ def _build_plan(db: Session, catalog: CaseCatalog, conversation: Conversation) -
         estimated_input_tokens=context.estimated_input_tokens,
         max_output_tokens=int(budget.get("max_output_tokens", 400)),
         deadline_at=conversation.generation_deadline_at or _utcnow(),
+        memory_epoch=memory_epoch,
+        summary_write=summary_write,
+        expected_revision=expected_revision,
     )
 
 
@@ -322,6 +379,7 @@ def _reserve(
     """Step 2: re-verify under the session lock, reserve budget, mark GENERATING."""
     now = _utcnow()
     with sessions() as db, db.begin():
+        repository = SessionRepository(db)
         conversation = db.get_one(Conversation, conversation_id)
         if conversation is None or conversation.generation_status != "PREPARING":
             return None
@@ -376,6 +434,19 @@ def _reserve(
             created_at=now,
             deadline_at=conversation.generation_deadline_at or now,
         )
+        if plan.summary_write is not None:
+            try:
+                repository.store_memory_summary(
+                    row.session_id,
+                    row.template_id,
+                    conversation.character_id,
+                    plan.memory_epoch,
+                    plan.summary_write,
+                    plan.expected_revision,
+                    now,
+                )
+            except Exception:  # noqa: BLE001 - the summary is a cache, never a requirement
+                pass
         db.add(attempt)
         db.flush()
         conversation.generation_status = "GENERATING"

@@ -84,6 +84,13 @@ function contradict() {
       </li>
     </ul>
     <div v-if="active" data-testid="interrogation-panel" class="panel">
+      <ElAlert
+        v-if="game.view?.session.generation_available === false"
+        type="info"
+        title="本局生成额度已用完，已切换为固定回复；调查与指控不受影响。"
+        :closable="false"
+        show-icon
+      />
       <blockquote class="statement">{{ active.name }}：{{ active.fixed_statement }}</blockquote>
       <div data-testid="conversation-log" class="log">
         <article v-for="round in game.conversations" :key="round.conversation_id" class="round">

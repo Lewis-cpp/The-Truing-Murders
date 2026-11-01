@@ -24,30 +24,41 @@ MAX_BODY_BYTES = 64 * 1024
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = Settings()
-    engine = create_engine(
-        str(settings.database_url), pool_pre_ping=True, connect_args={"connect_timeout": 3}
-    )
-    app.state.settings = settings
-    app.state.engine = engine
-    # Injection points (spec 6.1): the gateway exists only when generation is enabled;
-    # both live on app.state and are read per request, so tests may replace them.
-    app.state.llm_gateway = LLMGateway(settings) if settings.llm_enabled else None
-    app.state.llm_config = GenerationConfig.from_settings(settings)
-    dispatcher = ThreadDispatcher(settings.llm_concurrency)
-    app.state.generation_dispatcher = dispatcher
-    # Case import is an explicit offline step; startup never writes definitions.
-    app.state.service = GameService(
-        sessionmaker(engine, expire_on_commit=False),
-        generation=lambda: GenerationRuntime(
-            app.state.llm_config, app.state.llm_gateway, app.state.generation_dispatcher
-        ),
-    )
+    # A nested client re-enters this lifespan while the outer one is still running;
+    # that re-entry keeps the running gateway, dispatcher and any test replacements.
+    # Sequential starts (a new client after the previous one closed) initialize again.
+    depth = getattr(app.state, "_lifespan_depth", 0)
+    app.state._lifespan_depth = depth + 1
     try:
-        yield
+        if depth > 0:
+            yield
+            return
+        settings = Settings()
+        engine = create_engine(
+            str(settings.database_url), pool_pre_ping=True, connect_args={"connect_timeout": 3}
+        )
+        app.state.settings = settings
+        app.state.engine = engine
+        # Injection points (spec 6.1): the gateway exists only when generation is enabled;
+        # both live on app.state and are read per request, so tests may replace them.
+        app.state.llm_gateway = LLMGateway(settings) if settings.llm_enabled else None
+        app.state.llm_config = GenerationConfig.from_settings(settings)
+        dispatcher = ThreadDispatcher(max_workers=settings.llm_concurrency)
+        app.state.generation_dispatcher = dispatcher
+        # Case import is an explicit offline step; startup never writes definitions.
+        app.state.service = GameService(
+            sessionmaker(engine, expire_on_commit=False),
+            generation=lambda: GenerationRuntime(
+                app.state.llm_config, app.state.llm_gateway, app.state.generation_dispatcher
+            ),
+        )
+        try:
+            yield
+        finally:
+            dispatcher.shutdown()
+            engine.dispose()
     finally:
-        dispatcher.shutdown()
-        engine.dispose()
+        app.state._lifespan_depth = depth
 
 
 app = FastAPI(title="The Truing Murders", version="0.2.0", lifespan=lifespan)

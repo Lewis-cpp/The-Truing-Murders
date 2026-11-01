@@ -63,7 +63,9 @@ def _public_source(case: Case, kind: str, source_id: str | None) -> dict:
     return {"kind": "NPC", "id": source_id, "label": _name_of(case, source_id)}
 
 
-def session_summary(template: CaseTemplate, saved: SavedGame, is_current: bool) -> dict:
+def session_summary(
+    template: CaseTemplate, saved: SavedGame, is_current: bool, generation_available: bool = True
+) -> dict:
     state = saved.state
     return {
         "session_id": str(saved.session_id),
@@ -79,6 +81,7 @@ def session_summary(template: CaseTemplate, saved: SavedGame, is_current: bool) 
         "closed_at": iso(saved.closed_at),
         "finished_at": iso(saved.finished_at),
         "available_actions": AVAILABLE_ACTIONS[state.phase] if is_current else [],
+        "generation_available": generation_available,
     }
 
 
@@ -348,6 +351,7 @@ def session_view(
     saved: SavedGame,
     is_current: bool,
     pending_conversations: list[dict] | None = None,
+    generation_available: bool = True,
 ) -> dict:
     from backend.domain.rules import open_scenes
 
@@ -359,7 +363,7 @@ def session_view(
         if k.disclosure == "PUBLIC" or k.id in state.disclosed_knowledge
     ]
     return {
-        "session": session_summary(template, saved, is_current),
+        "session": session_summary(template, saved, is_current, generation_available),
         "intro_text": case.introduction,
         "scenes": [scene_view(case, saved, scene) for scene in case.scenes if scene.id in open_ids],
         "evidence": [
