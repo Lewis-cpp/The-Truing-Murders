@@ -5,7 +5,7 @@ Every write path runs inside the caller's transaction after locking the game_ses
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -33,6 +33,7 @@ from backend.infrastructure.database.models import (
     ConversationMessage,
     GameEventLog,
     GameSession,
+    LlmAttempt,
     NpcState,
     PlayerEvidence,
     RuleEffect,
@@ -416,13 +417,22 @@ class SessionRepository:
     # Conversation rounds
 
     def add_conversation(
-        self, row: GameSession, case: Case, input: ConversationInput
+        self,
+        row: GameSession,
+        case: Case,
+        input: ConversationInput,
+        *,
+        fallback_reason: str = "GENERATION_DISABLED",
+        pending_deadline: datetime | None = None,
     ) -> Conversation:
+        """One interaction round. With a pending deadline it starts PREPARING with only
+        the player message; otherwise it is terminal in the fixed mode."""
         last = self._db.scalar(
             select(func.max(Conversation.conversation_seq)).where(
                 Conversation.session_id == row.session_id
             )
         )
+        pending = pending_deadline is not None
         conversation = Conversation(
             conversation_id=uuid.uuid4(),
             session_id=row.session_id,
@@ -435,21 +445,19 @@ class SessionRepository:
             source_state_version=input.source_state_version,
             response_plan_json={},
             fixed_reply=input.fixed_reply,
-            generation_status="FALLBACK",
-            generation_deadline_at=None,
-            fallback_reason="GENERATION_DISABLED",
+            generation_status="PREPARING" if pending else "FALLBACK",
+            active_attempt_id=None,
+            generation_deadline_at=pending_deadline,
+            fallback_reason=None if pending else fallback_reason,
             created_at=input.now,
-            completed_at=input.now,
+            completed_at=None if pending else input.now,
         )
         self._db.add(conversation)
         self._db.flush()
-        for sequence, (speaker, origin, content) in enumerate(
-            (
-                ("PLAYER", "PLAYER", input.player_message),
-                ("NPC", "FIXED", input.npc_message),
-            ),
-            start=1,
-        ):
+        messages = [("PLAYER", "PLAYER", input.player_message)]
+        if not pending:
+            messages.append(("NPC", "FIXED", input.npc_message))
+        for sequence, (speaker, origin, content) in enumerate(messages, start=1):
             self._db.add(
                 ConversationMessage(
                     message_id=uuid.uuid4(),
@@ -467,7 +475,197 @@ class SessionRepository:
         self._db.flush()
         return conversation
 
-    def conversation_view(self, conversation: Conversation, request: ActionRequest) -> dict:
+    def pending_round(self, session_id: uuid.UUID) -> Conversation | None:
+        """The at-most-one unexpired PREPARING/GENERATING round of this session."""
+        return self._db.scalar(
+            select(Conversation)
+            .where(
+                Conversation.session_id == session_id,
+                Conversation.generation_status.in_(("PREPARING", "GENERATING")),
+                Conversation.generation_deadline_at > datetime.now(UTC),
+            )
+            .order_by(Conversation.created_at)
+        )
+
+    def pending_summaries(self, session_id: uuid.UUID) -> list[dict]:
+        rows = list(
+            self._db.scalars(
+                select(Conversation).where(
+                    Conversation.session_id == session_id,
+                    Conversation.generation_status.in_(("PREPARING", "GENERATING")),
+                )
+            )
+        )
+        now = datetime.now(UTC)
+        return [
+            {
+                "conversation_id": str(row.conversation_id),
+                "npc_id": row.character_id,
+                "generation_status": row.generation_status,
+                "generation_deadline_at": row.generation_deadline_at.isoformat().replace(
+                    "+00:00", "Z"
+                )
+                if row.generation_deadline_at
+                else None,
+                "deadline_exceeded": bool(
+                    row.generation_deadline_at and row.generation_deadline_at <= now
+                ),
+            }
+            for row in rows
+        ]
+
+    def invalidate_pending(self, session_id: uuid.UUID, now: datetime) -> None:
+        """Switching, leaving, accusation or restart: pending rounds become STALE in the
+        same business transaction; late results may only settle usage later."""
+        rounds = list(
+            self._db.scalars(
+                select(Conversation).where(
+                    Conversation.session_id == session_id,
+                    Conversation.generation_status.in_(("PREPARING", "GENERATING")),
+                )
+            )
+        )
+        for conversation in rounds:
+            self._stale(conversation, now)
+
+    def expire_pending(self, session_id: uuid.UUID, now: datetime) -> None:
+        """Before accepting a new command: clear expired placeholders. Never resend."""
+        rounds = list(
+            self._db.scalars(
+                select(Conversation).where(
+                    Conversation.session_id == session_id,
+                    Conversation.generation_status.in_(("PREPARING", "GENERATING")),
+                    Conversation.generation_deadline_at <= now,
+                )
+            )
+        )
+        for conversation in rounds:
+            attempt = (
+                self._db.get_one(LlmAttempt, conversation.active_attempt_id)
+                if conversation.active_attempt_id
+                else None
+            )
+            if attempt is not None and attempt.status == "RESERVED":
+                attempt.status = "CANCELLED_NOT_SENT"
+                attempt.usage_status = "NOT_SENT"
+                attempt.finished_at = now
+            elif attempt is not None and attempt.status == "DISPATCHING":
+                # It may have reached the provider; the reservation stays reserved.
+                attempt.status = "UNKNOWN"
+                attempt.usage_status = "UNKNOWN"
+                attempt.finished_at = now
+            conversation.generation_status = "FALLBACK"
+            conversation.fallback_reason = "GENERATION_INTERRUPTED"
+            conversation.completed_at = now
+            self._write_fixed_reply(
+                db=self._db, conversation=conversation, attempt_id=None, now=now
+            )
+
+    def _stale(self, conversation: Conversation, now: datetime) -> None:
+        conversation.generation_status = "STALE"
+        conversation.fallback_reason = "CONTEXT_CHANGED"
+        conversation.completed_at = now
+        self._write_fixed_reply(db=self._db, conversation=conversation, attempt_id=None, now=now)
+
+    def _write_fixed_reply(
+        self, db: Session, conversation: Conversation, attempt_id: uuid.UUID | None, now: datetime
+    ) -> None:
+        existing = self._db.scalar(
+            select(ConversationMessage).where(
+                ConversationMessage.conversation_id == conversation.conversation_id,
+                ConversationMessage.sequence_no == 2,
+            )
+        )
+        if existing is not None:
+            existing.content = conversation.fixed_reply
+            existing.origin = "FIXED"
+            existing.attempt_id = attempt_id
+            existing.updated_at = now
+            return
+        self._db.add(
+            ConversationMessage(
+                message_id=uuid.uuid4(),
+                session_id=conversation.session_id,
+                conversation_id=conversation.conversation_id,
+                sequence_no=2,
+                speaker="NPC",
+                content=conversation.fixed_reply,
+                origin="FIXED",
+                validity="VALID",
+                attempt_id=attempt_id,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        self._db.flush()
+
+    def history_rounds(self, session_id: uuid.UUID, character_id: str, before_seq: int) -> list:
+        """Previous terminal rounds of this person, oldest first, for the model context."""
+        rows = list(
+            self._db.scalars(
+                select(Conversation)
+                .where(
+                    Conversation.session_id == session_id,
+                    Conversation.character_id == character_id,
+                    Conversation.conversation_seq < before_seq,
+                    Conversation.generation_status.in_(("COMPLETED", "FALLBACK")),
+                )
+                .order_by(Conversation.conversation_seq.desc())
+                .limit(12)
+            )
+        )
+        rounds = []
+        for conversation in reversed(rows):
+            messages = list(
+                self._db.scalars(
+                    select(ConversationMessage)
+                    .where(ConversationMessage.conversation_id == conversation.conversation_id)
+                    .order_by(ConversationMessage.sequence_no)
+                )
+            )
+            player_text = next((m.content for m in messages if m.sequence_no == 1), "")
+            npc_text = next((m.content for m in messages if m.sequence_no == 2), "")
+            from backend.application.memory import HistoryRound
+
+            rounds.append(
+                HistoryRound(
+                    conversation_seq=conversation.conversation_seq,
+                    npc_id=conversation.character_id or "",
+                    player_text=player_text,
+                    npc_text=npc_text,
+                    status=conversation.generation_status,
+                )
+            )
+        return rounds
+
+    def conversation_attempts(self, conversation_id: uuid.UUID) -> list[LlmAttempt]:
+        return list(
+            self._db.scalars(
+                select(LlmAttempt)
+                .where(LlmAttempt.conversation_id == conversation_id)
+                .order_by(LlmAttempt.attempt_no)
+            )
+        )
+
+    def has_other_pending(self, session_id: uuid.UUID, conversation_id: uuid.UUID) -> bool:
+        return (
+            self._db.scalar(
+                select(Conversation.conversation_id).where(
+                    Conversation.session_id == session_id,
+                    Conversation.conversation_id != conversation_id,
+                    Conversation.generation_status.in_(("PREPARING", "GENERATING")),
+                )
+            )
+            is not None
+        )
+
+    def conversation_view(
+        self,
+        conversation: Conversation,
+        request: ActionRequest,
+        state: GameState | None = None,
+        is_current: bool = True,
+    ) -> dict:
         messages = list(
             self._db.scalars(
                 select(ConversationMessage)
@@ -478,6 +676,30 @@ class SessionRepository:
         interaction = (
             "EVIDENCE_PRESENTATION" if request.command_type == "PRESENT_EVIDENCE" else "CHAT"
         )
+        now = datetime.now(UTC)
+        pending = conversation.generation_status in ("PREPARING", "GENERATING")
+        deadline_exceeded = bool(
+            pending
+            and conversation.generation_deadline_at is not None
+            and conversation.generation_deadline_at <= now
+        )
+        attempts = self.conversation_attempts(conversation.conversation_id)
+        latest = attempts[-1] if attempts else None
+        from backend.application.generation import can_retry_reply
+
+        can_retry = can_retry_reply(
+            conversation.generation_status,
+            conversation.fallback_reason,
+            latest.error_code if latest else None,
+            (latest.usage_json or {}).get("retry_after_seconds") if latest else None,
+            latest.finished_at if latest else None,
+            len(attempts),
+            state,
+            is_current,
+            conversation.character_id,
+            conversation.source_state_version,
+            now,
+        ) and not self.has_other_pending(conversation.session_id, conversation.conversation_id)
         return {
             "conversation_id": str(conversation.conversation_id),
             "conversation_seq": conversation.conversation_seq,
@@ -487,8 +709,12 @@ class SessionRepository:
             "interaction_type": interaction,
             "source_state_version": conversation.source_state_version,
             "generation_status": conversation.generation_status,
-            "generation_deadline_at": None,
-            "deadline_exceeded": False,
+            "generation_deadline_at": conversation.generation_deadline_at.isoformat().replace(
+                "+00:00", "Z"
+            )
+            if conversation.generation_deadline_at
+            else None,
+            "deadline_exceeded": deadline_exceeded,
             "fixed_reply": conversation.fixed_reply,
             "messages": [
                 {
@@ -504,7 +730,7 @@ class SessionRepository:
                 for message in messages
             ],
             "fallback_reason": conversation.fallback_reason,
-            "can_retry_reply": False,
+            "can_retry_reply": can_retry,
             "created_at": conversation.created_at.isoformat().replace("+00:00", "Z"),
             "completed_at": conversation.completed_at.isoformat().replace("+00:00", "Z")
             if conversation.completed_at

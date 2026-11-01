@@ -342,7 +342,13 @@ def timeline_view(case: Case, saved: SavedGame) -> dict:
     return {"origin_label": case.timeline_origin_label, "items": items}
 
 
-def session_view(case: Case, template: CaseTemplate, saved: SavedGame, is_current: bool) -> dict:
+def session_view(
+    case: Case,
+    template: CaseTemplate,
+    saved: SavedGame,
+    is_current: bool,
+    pending_conversations: list[dict] | None = None,
+) -> dict:
     from backend.domain.rules import open_scenes
 
     state = saved.state
@@ -365,7 +371,7 @@ def session_view(case: Case, template: CaseTemplate, saved: SavedGame, is_curren
         "timeline": timeline_view(case, saved),
         "accusation_options": accusation_options(case),
         "accusation_draft": draft_view(saved)["content"],
-        "pending_conversations": [],
+        "pending_conversations": pending_conversations or [],
     }
 
 

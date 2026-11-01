@@ -457,8 +457,7 @@ class LlmAttempt(Base):
             "usage_status IN ('RESERVED', 'KNOWN', 'UNKNOWN', 'NOT_SENT')", name="usage_status"
         ),
         CheckConstraint(
-            "validation_status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'STALE',"
-            " 'NOT_APPLICABLE')",
+            "validation_status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'STALE', 'NOT_APPLICABLE')",
             name="validation_status",
         ),
         CheckConstraint("attempt_no > 0", name="attempt_no"),
@@ -510,6 +509,11 @@ class ConversationMessage(Base):
             ["conversation.session_id", "conversation.conversation_id"],
             **RESTRICT,
         ),
+        ForeignKeyConstraint(
+            ["session_id", "conversation_id", "attempt_id"],
+            ["llm_attempt.session_id", "llm_attempt.conversation_id", "llm_attempt.attempt_id"],
+            **RESTRICT,
+        ),
         CheckConstraint("sequence_no IN (1, 2)", name="sequence_no"),
         CheckConstraint("speaker IN ('PLAYER', 'NPC', 'HOST', 'REVIEW')", name="speaker"),
         CheckConstraint("origin IN ('PLAYER', 'LLM', 'FIXED')", name="origin"),
@@ -524,5 +528,7 @@ class ConversationMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     origin: Mapped[str] = mapped_column(String(8))
     validity: Mapped[str] = mapped_column(String(8), server_default=text("'VALID'"))
+    # The attempt that produced an LLM message; fixed fallbacks may link their cause.
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

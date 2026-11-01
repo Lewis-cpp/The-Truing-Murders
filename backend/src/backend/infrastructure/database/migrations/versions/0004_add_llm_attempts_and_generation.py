@@ -55,9 +55,7 @@ def upgrade() -> None:
         sa.Column("output_tokens", sa.Integer(), nullable=True),
         sa.Column("billable_tokens", sa.BigInteger(), nullable=True),
         sa.Column("usage_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column(
-            "pricing_snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
-        ),
+        sa.Column("pricing_snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("estimated_cost", sa.Numeric(18, 8), nullable=True),
         sa.Column("error_code", sa.String(length=64), nullable=True),
         sa.Column("latency_ms", sa.Integer(), nullable=True),
@@ -83,9 +81,7 @@ def upgrade() -> None:
             "output_tokens IS NULL OR output_tokens >= 0",
             name=op.f("ck_llm_attempt_output_tokens"),
         ),
-        sa.CheckConstraint(
-            "reserved_tokens >= 0", name=op.f("ck_llm_attempt_reserved_tokens")
-        ),
+        sa.CheckConstraint("reserved_tokens >= 0", name=op.f("ck_llm_attempt_reserved_tokens")),
         sa.CheckConstraint(
             "status IN ('RESERVED', 'DISPATCHING', 'SUCCEEDED', 'FAILED', 'UNKNOWN',"
             " 'CANCELLED_NOT_SENT')",
@@ -96,8 +92,7 @@ def upgrade() -> None:
             name=op.f("ck_llm_attempt_usage_status"),
         ),
         sa.CheckConstraint(
-            "validation_status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'STALE',"
-            " 'NOT_APPLICABLE')",
+            "validation_status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'STALE', 'NOT_APPLICABLE')",
             name=op.f("ck_llm_attempt_validation_status"),
         ),
         sa.ForeignKeyConstraint(
@@ -120,9 +115,7 @@ def upgrade() -> None:
             "attempt_no",
             name=op.f("uq_llm_attempt_conversation_id_attempt_no"),
         ),
-        sa.UniqueConstraint(
-            "request_action_id", name=op.f("uq_llm_attempt_request_action_id")
-        ),
+        sa.UniqueConstraint("request_action_id", name=op.f("uq_llm_attempt_request_action_id")),
         sa.UniqueConstraint(
             "session_id",
             "conversation_id",
@@ -130,9 +123,7 @@ def upgrade() -> None:
             name=op.f("uq_llm_attempt_session_id_conversation_id_attempt_id"),
         ),
     )
-    op.create_index(
-        "ix_llm_attempt_session", "llm_attempt", ["session_id"], unique=False
-    )
+    op.create_index("ix_llm_attempt_session", "llm_attempt", ["session_id"], unique=False)
     op.add_column(
         "conversation",
         sa.Column("active_attempt_id", sa.UUID(), nullable=True),
@@ -163,12 +154,30 @@ def upgrade() -> None:
         "game_session",
         "llm_budget_json IS NULL OR jsonb_typeof(llm_budget_json) = 'object'",
     )
+    # Messages may point at the attempt that produced them (doc 09, section 6.5).
+    op.add_column(
+        "conversation_message",
+        sa.Column("attempt_id", sa.UUID(), nullable=True),
+    )
+    op.create_foreign_key(
+        op.f("fk_conversation_message_session_id_conversation_id_attempt_id_llm_attempt"),
+        "conversation_message",
+        "llm_attempt",
+        ["session_id", "conversation_id", "attempt_id"],
+        ["session_id", "conversation_id", "attempt_id"],
+        onupdate="RESTRICT",
+        ondelete="RESTRICT",
+    )
 
 
 def downgrade() -> None:
     op.drop_constraint(
-        op.f("ck_game_session_llm_budget_json"), "game_session", type_="check"
+        op.f("fk_conversation_message_session_id_conversation_id_attempt_id_llm_attempt"),
+        "conversation_message",
+        type_="foreignkey",
     )
+    op.drop_column("conversation_message", "attempt_id")
+    op.drop_constraint(op.f("ck_game_session_llm_budget_json"), "game_session", type_="check")
     op.drop_column("game_session", "llm_budget_json")
     op.drop_index("uq_conversation_session_pending", table_name="conversation")
     op.drop_constraint(

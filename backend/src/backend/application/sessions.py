@@ -10,13 +10,19 @@ import secrets
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.application import views
 from backend.application.catalog import CaseCatalog, is_supported
 from backend.application.errors import ApiProblem
+from backend.application.generation import (
+    GenerationRuntime,
+    can_retry_reply,
+    run_generation_task,
+    usage_of,
+)
 from backend.domain import rules
 from backend.domain.evidence import current_statement, outcome_text
 from backend.domain.models import (
@@ -77,6 +83,8 @@ class CommandResponse:
     status_code: int
     body: dict
     location: str | None = None
+    # Set only when a PREPARING round was created; submitted after the commit.
+    task: Callable[[], None] | None = None
 
 
 @dataclass
@@ -98,6 +106,8 @@ class Decision:
     input_json: dict = field(default_factory=dict)
     conversation: Callable[[Case, ActionRequest, SavedGame, dict], ConversationInput] | None = None
     conversation_data: Callable[[dict, dict], dict] | None = None
+    # When set, the interaction round may go to the model for this NPC (v0.4: NPC01).
+    generation_npc: str | None = None
 
 
 @dataclass(frozen=True)
@@ -116,10 +126,34 @@ def _public(code: str) -> str:
     return "NPC_EVADING" if code == "EVASION_STARTED" else code
 
 
+# Commands that may start a generation: they clean expired placeholders first and
+# answer 409 GENERATION_BUSY while another pending round holds the session.
+GENERATION_ACCEPTING = {"CHAT", "PRESENT_EVIDENCE"}
+# Commands that make the pending context invalid in the same business transaction.
+INVALIDATING = {"SET_INTERROGATION", "END_INTERROGATION", "OPEN_ACCUSATION"}
+
+
 class GameService:
-    def __init__(self, sessions: sessionmaker[Session], catalog: CaseCatalog | None = None):
+    def __init__(
+        self,
+        sessions: sessionmaker[Session],
+        catalog: CaseCatalog | None = None,
+        generation: Callable[[], GenerationRuntime | None] | None = None,
+    ):
         self._sessions = sessions
         self._catalog = catalog or CaseCatalog()
+        # Read per request from app.state; never captured at startup.
+        self._generation_provider = generation
+
+    def _generation(self) -> GenerationRuntime | None:
+        return self._generation_provider() if self._generation_provider else None
+
+    def _submit_task(self, response: CommandResponse) -> CommandResponse:
+        if response.task is not None:
+            runtime = self._generation()
+            if runtime is not None and runtime.dispatcher is not None:
+                runtime.dispatcher.submit(response.task)
+        return response
 
     # Visitors
 
@@ -187,9 +221,13 @@ class GameService:
 
     def session_view(self, visitor_id: uuid.UUID, session_id: uuid.UUID) -> dict:
         with self._read() as db:
-            _, row, template, case, saved = self._load_owned(db, visitor_id, session_id)
+            repository, row, template, case, saved = self._load_owned(db, visitor_id, session_id)
             return views.session_view(
-                case, template, saved, self._is_current(db, visitor_id, row.session_id)
+                case,
+                template,
+                saved,
+                self._is_current(db, visitor_id, row.session_id),
+                repository.pending_summaries(session_id),
             )
 
     def current_session(self, visitor_id: uuid.UUID) -> dict:
@@ -197,10 +235,12 @@ class GameService:
             current = db.get_one(Visitor, visitor_id).current_session_id
             if current is None:
                 return {"current_session_id": None, "session": None}
-            _, _, template, case, saved = self._load_owned(db, visitor_id, current)
+            repository, _, template, case, saved = self._load_owned(db, visitor_id, current)
             return {
                 "current_session_id": str(current),
-                "session": views.session_view(case, template, saved, True),
+                "session": views.session_view(
+                    case, template, saved, True, repository.pending_summaries(current)
+                ),
             }
 
     def closed_view(self, visitor_id: uuid.UUID, session_id: uuid.UUID, review: bool) -> dict:
@@ -373,7 +413,14 @@ class GameService:
                 conversation, request = repository.find_conversation(
                     session_id, row.conversation_id
                 )
-                items.append(repository.conversation_view(conversation, request))
+                items.append(
+                    repository.conversation_view(
+                        conversation,
+                        request,
+                        saved.state,
+                        self._is_current(db, visitor_id, session_id),
+                    )
+                )
             return {
                 "session_id": str(session_id),
                 "state_version": saved.state.version,
@@ -392,7 +439,12 @@ class GameService:
             return {
                 "session_id": str(session_id),
                 "state_version": saved.state.version,
-                "data": repository.conversation_view(conversation, request),
+                "data": repository.conversation_view(
+                    conversation,
+                    request,
+                    saved.state,
+                    self._is_current(db, visitor_id, session_id),
+                ),
             }
 
     # Idempotency helpers
@@ -520,13 +572,13 @@ class GameService:
             return self._finish(request, result, saved, f"/api/v1/sessions/{row.session_id}")
 
     @staticmethod
-    def _finish(request: ActionRequest, result: dict, saved: SavedGame, location):
+    def _finish(request: ActionRequest, result: dict, saved: SavedGame, location, task=None):
         if location:
             result["_location"] = location
         request.result_json = result
         request.result_state_version = saved.state.version
         request.completed_at = datetime.now(UTC)
-        return CommandResponse(request.http_status, result, location)
+        return CommandResponse(request.http_status, result, location, task)
 
     # Generic command execution
 
@@ -566,6 +618,15 @@ class GameService:
                             "current_state_version": row.state_version,
                         },
                     )
+                if command_type in GENERATION_ACCEPTING:
+                    repository.expire_pending(session_id, now)
+                    pending = repository.pending_round(session_id)
+                    if pending is not None:
+                        raise ApiProblem(
+                            "GENERATION_BUSY",
+                            "上一条回复还在生成中，等它完成或失效后再继续。",
+                            {"conversation_id": str(pending.conversation_id)},
+                        )
                 try:
                     decision = handler(case, before, request)
                 except GameError as error:
@@ -593,16 +654,49 @@ class GameService:
                     self._outcome(before.state, decision.after),
                     now,
                 )
+            if command_type in INVALIDATING:
+                # Switching, leaving or accusation: pending rounds go STALE here, so a
+                # late model answer can only settle usage, never write a reply.
+                repository.invalidate_pending(session_id, now)
             after = repository.load(row, case)
             data = decision.data(before, after, template)
             conversation_view = None
+            task = None
             if decision.conversation is not None:
+                runtime = self._generation()
+                mode = runtime.mode_for(decision.generation_npc) if runtime else "DISABLED"
+                fallback_reason = "GENERATION_DISABLED"
+                pending_deadline = None
+                if mode == "READY" and runtime is not None:
+                    calls, tokens = usage_of(db, row.session_id)
+                    config = runtime.config
+                    if calls >= config.call_limit or tokens >= config.token_limit:
+                        mode = "DISABLED"
+                        fallback_reason = "GENERATION_BUDGET_EXHAUSTED"
+                    else:
+                        pending_deadline = now + timedelta(seconds=config.timeout_seconds)
                 conversation_input = decision.conversation(case, request, after, data)
-                conversation = repository.add_conversation(row, case, conversation_input)
-                conversation_view = repository.conversation_view(conversation, request)
+                conversation = repository.add_conversation(
+                    row,
+                    case,
+                    conversation_input,
+                    fallback_reason=fallback_reason,
+                    pending_deadline=pending_deadline,
+                )
+                conversation_view = repository.conversation_view(
+                    conversation, request, after.state, True
+                )
                 request.status = "COMMITTED"
                 if decision.conversation_data is not None:
                     data = decision.conversation_data(conversation_view, data)
+                if pending_deadline is not None:
+                    task = _generation_task(
+                        self._sessions,
+                        self._catalog,
+                        uuid.UUID(conversation_view["conversation_id"]),
+                        runtime.gateway,
+                        request.action_id,
+                    )
             result = self._action_result(command, request, before, after, data)
             result["conversation"] = conversation_view
             if conversation_view is not None:
@@ -610,7 +704,7 @@ class GameService:
                 location = f"/api/v1/sessions/{session_id}/conversations/{conversation_id}"
             else:
                 location = decision.location or f"/api/v1/requests/{command.request_id}"
-            return self._finish(request, result, after, location)
+            return self._finish(request, result, after, location, task)
 
     @staticmethod
     def _outcome(before: GameState, after: GameState) -> dict:
@@ -760,9 +854,116 @@ class GameService:
                 lambda *_: {"npc_id": npc_id, "fixed_reply": reply},
                 conversation=conversation,
                 conversation_data=lambda view, _data: {"conversation_id": view["conversation_id"]},
+                generation_npc=npc_id,
             )
 
-        return self._execute(visitor_id, session_id, command, "CHAT", handler)
+        return self._submit_task(self._execute(visitor_id, session_id, command, "CHAT", handler))
+
+    def reply_retry(self, visitor_id, session_id, command: Command, conversation_id: uuid.UUID):
+        return self._submit_task(
+            self._reply_retry(visitor_id, session_id, command, conversation_id)
+        )
+
+    def _reply_retry(self, visitor_id, session_id, command: Command, conversation_id: uuid.UUID):
+        """Explicit retry (spec 6.5): re-queue one failed round; rules stay untouched."""
+        runtime = self._generation()
+        now = datetime.now(UTC)
+        with self._sessions() as db, db.begin():
+            repository = SessionRepository(db)
+            replay = self._replay(repository, visitor_id, command)
+            if replay:
+                return replay
+            repository, row, template, case, saved = self._load_owned(
+                db, visitor_id, session_id, lock=True
+            )
+            replay = self._replay(repository, visitor_id, command)
+            if replay:
+                return replay
+            request = self._new_request(visitor_id, command, "REPLY_RETRY", session_id, now)
+            try:
+                if not self._is_current(db, visitor_id, session_id):
+                    raise ApiProblem("SESSION_NOT_CURRENT", "这是已被替换的旧局，只能查看。")
+                if row.state_version != command.expected_version:
+                    raise ApiProblem(
+                        "STATE_VERSION_CONFLICT",
+                        "游戏进度已更新，请刷新后重试。",
+                        {
+                            "expected_state_version": command.expected_version,
+                            "current_state_version": row.state_version,
+                        },
+                    )
+                found = repository.find_conversation(session_id, conversation_id)
+                if found is None:
+                    raise ApiProblem("CONVERSATION_NOT_FOUND", "没有找到该对话轮次。")
+                conversation, _ = found
+                repository.expire_pending(session_id, now)
+                attempts = repository.conversation_attempts(conversation_id)
+                latest = attempts[-1] if attempts else None
+                retry_ok = can_retry_reply(
+                    conversation.generation_status,
+                    conversation.fallback_reason,
+                    latest.error_code if latest else None,
+                    (latest.usage_json or {}).get("retry_after_seconds") if latest else None,
+                    latest.finished_at if latest else None,
+                    len(attempts),
+                    saved.state,
+                    True,
+                    conversation.character_id,
+                    conversation.source_state_version,
+                    now,
+                )
+                if not retry_ok:
+                    raise ApiProblem("REPLY_RETRY_NOT_ALLOWED", "该轮回复当前不能重试。")
+                if repository.has_other_pending(session_id, conversation_id):
+                    pending = repository.pending_round(session_id)
+                    raise ApiProblem(
+                        "GENERATION_BUSY",
+                        "上一条回复还在生成中，等它完成或失效后再继续。",
+                        {"conversation_id": str(pending.conversation_id)} if pending else None,
+                    )
+                config = runtime.config if runtime else None
+                if config is None or runtime.gateway is None:
+                    raise ApiProblem("REPLY_RETRY_NOT_ALLOWED", "当前没有可用的生成通道。")
+                calls, tokens = usage_of(db, session_id)
+                if calls >= config.call_limit or tokens >= config.token_limit:
+                    raise ApiProblem(
+                        "GENERATION_BUDGET_EXHAUSTED",
+                        "本局的生成额度已用完，只能使用固定回复。",
+                        retryable=True,
+                    )
+                conversation.generation_status = "PREPARING"
+                conversation.generation_deadline_at = now + timedelta(
+                    seconds=config.timeout_seconds
+                )
+                conversation.fallback_reason = None
+                conversation.completed_at = None
+                conversation.active_attempt_id = None
+                request.status = "COMMITTED"
+                request.http_status = 201
+                repository.add_request(request)
+                after = repository.load(row, case)
+                result = self._action_result(
+                    command, request, saved, after, {"conversation_id": str(conversation_id)}
+                )
+                result["conversation"] = repository.conversation_view(
+                    conversation, request, after.state, True
+                )
+                result["state_changed"] = False
+                return self._finish(
+                    request,
+                    result,
+                    after,
+                    f"/api/v1/requests/{command.request_id}",
+                    _generation_task(
+                        self._sessions,
+                        self._catalog,
+                        conversation_id,
+                        runtime.gateway,
+                        request.action_id,
+                    ),
+                )
+            except ApiProblem as problem:
+                return self._reject(repository, request, problem)
 
     @staticmethod
     def _interrogation_data(
@@ -859,9 +1060,12 @@ class GameService:
                 presented_evidence_id=evidence_id,
                 input_json={"npc_id": npc_id, "evidence_id": evidence_id},
                 conversation=conversation,
+                generation_npc=npc_id,
             )
 
-        return self._execute(visitor_id, session_id, command, "PRESENT_EVIDENCE", handler)
+        return self._submit_task(
+            self._execute(visitor_id, session_id, command, "PRESENT_EVIDENCE", handler)
+        )
 
     def point_contradiction(
         self,
@@ -1017,3 +1221,16 @@ class GameService:
 def _npc_name(case: Case, saved: SavedGame) -> str:
     npc_id = saved.state.active_npc_id
     return next((c.name for c in case.characters if c.id == npc_id), npc_id or "")
+
+
+def _generation_task(
+    sessions: sessionmaker[Session],
+    catalog: CaseCatalog,
+    conversation_id: uuid.UUID,
+    gateway,
+    request_action_id: uuid.UUID,
+) -> Callable[[], None]:
+    def task() -> None:
+        run_generation_task(sessions, catalog, conversation_id, gateway, request_action_id)
+
+    return task

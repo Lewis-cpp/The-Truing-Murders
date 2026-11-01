@@ -233,6 +233,25 @@ def ask_topic(
 
 
 @router.post(
+    "/sessions/{session_id}/conversations/{conversation_id}/reply-retries",
+    response_model=rs.ActionResult[rs.ChatResult],
+    status_code=201,
+    **WRITE,
+)
+def retry_reply(
+    session_id: UUID,
+    conversation_id: UUID,
+    body: rq.EmptyRequest,
+    visitor: Visitor,
+    game: Game,
+    commands: Commands,
+) -> JSONResponse:
+    command = commands(body.model_dump(mode="json"))
+    result = game.reply_retry(visitor, session_id, command, conversation_id)
+    return respond(result, rs.ActionResult[rs.ChatResult])
+
+
+@router.post(
     "/sessions/{session_id}/npcs/{npc_id}/evidence-presentations",
     response_model=rs.ActionResult[rs.PresentationResult],
     status_code=201,

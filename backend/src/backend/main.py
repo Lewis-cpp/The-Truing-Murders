@@ -10,8 +10,14 @@ from sqlalchemy.orm import sessionmaker
 from backend.api.errors import error_response, install_error_handlers
 from backend.api.routes import cases, sessions, visitors
 from backend.application.errors import ApiProblem
+from backend.application.generation import (
+    GenerationConfig,
+    GenerationRuntime,
+    ThreadDispatcher,
+)
 from backend.application.sessions import GameService
 from backend.config import Settings
+from backend.infrastructure.llm_client import LLMGateway
 
 MAX_BODY_BYTES = 64 * 1024
 
@@ -24,11 +30,23 @@ async def lifespan(app: FastAPI):
     )
     app.state.settings = settings
     app.state.engine = engine
+    # Injection points (spec 6.1): the gateway exists only when generation is enabled;
+    # both live on app.state and are read per request, so tests may replace them.
+    app.state.llm_gateway = LLMGateway(settings) if settings.llm_enabled else None
+    app.state.llm_config = GenerationConfig.from_settings(settings)
+    dispatcher = ThreadDispatcher(settings.llm_concurrency)
+    app.state.generation_dispatcher = dispatcher
     # Case import is an explicit offline step; startup never writes definitions.
-    app.state.service = GameService(sessionmaker(engine, expire_on_commit=False))
+    app.state.service = GameService(
+        sessionmaker(engine, expire_on_commit=False),
+        generation=lambda: GenerationRuntime(
+            app.state.llm_config, app.state.llm_gateway, app.state.generation_dispatcher
+        ),
+    )
     try:
         yield
     finally:
+        dispatcher.shutdown()
         engine.dispose()
 
 
