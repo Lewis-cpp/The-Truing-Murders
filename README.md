@@ -5,13 +5,14 @@
 
 ## 当前状态
 
-v0.3 接入《停电之夜》全案：4 场景按证据逐步开放、4 名可审讯人物、12 条证据、
-沈砚的两层谎言链，浏览器开局 → 四场景取证 → 进入深入调查 → 审讯并出示证据
-（击破但未承认、两层承认）→ 保存指控草稿并返回调查 → 正式指控 → 固定复盘。
-**不触发任何承认也能得 100 分**。所有规则和对白仍是固定内容，没有 Agent、模型 SDK 或模型调用。
-进度保存在 PostgreSQL，每次操作在一个事务内提交，数据库失败时页面不会显示保存成功；
-人物关系图与时间线只显示已确认条目，刷新或重启后端后继续。
-交付范围与限制见 [v0.3 交付记录](docs/19-v0.3-delivery.md)。
+v0.4 给沈砚（NPC01）接入模型：自由提问得到角色化回复，出示证据时固定结果先显示、
+模型再在获准范围内表达；其余三人仍是固定回复，整案照常可玩，**不触发任何承认也能得 100 分**。
+生成默认关闭（`LLM_ENABLED=false`），关闭时与 v0.3 的固定模式完全一致；规则与判定始终是
+固定内容，模型输出经服务端检查，没有任何写状态的入口。4 场景按证据逐步开放、12 条证据、
+两层谎言链、指控草稿与固定复盘沿袭 v0.3；进度保存在 PostgreSQL，每次操作在一个事务内提交，
+数据库失败时页面不会显示保存成功，人物关系图与时间线只显示已确认条目。
+待定回复由页面每 1.5 秒轮询，失败降级为固定回复并提示，玩家可显式重试（至多两次）。
+交付范围与限制见 [v0.4 交付记录](docs/20-v0.4-delivery.md)，模型配置见下文[启用模型](#启用模型)。
 
 审讯规则与 v0.2 切片一致：追问预设话题记为未核验证词，可以用证词和证据指出矛盾；
 出示与当前谎言层无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
@@ -97,8 +98,8 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 
 采用**数据库用 Docker、前后端本机运行**的方式。Docker 不是架构上的硬性要求，
 但本仓库的标准启动流程使用 Compose 管理 PostgreSQL，不需要另装本机数据库。
-不需要 Redis、消息队列、向量数据库或本地大模型；当前启动与测试不调用模型 API，
-不需要 API 密钥。
+不需要 Redis、消息队列、向量数据库或本地大模型。模型生成默认关闭，启动与测试不调用
+模型 API、不需要 API 密钥；启用方法见[启用模型](#启用模型)。
 
 | 工具 | 本项目基线 | 用途 |
 | --- | --- | --- |
@@ -165,7 +166,7 @@ npm run dev
 - `GET /api/v1/health`：进程存活检查，不依赖数据库。
 - `GET /api/v1/ready`：真实执行数据库查询，成功返回 200，连接失败返回 503。
 
-### v0.3 接口概览
+### 接口概览
 
 在 v0.2 的会话与审讯接口之上，新增以下只读资源与写接口（均挂在
 `/api/v1/sessions/{session_id}` 下，写接口仍需 `Idempotency-Key` 与
@@ -183,6 +184,7 @@ npm run dev
 | `/relationships`、`/timeline` | GET | 已确认关系图与时间线 |
 | `/accusation-options` | GET | 指控候选（不含答案） |
 | `/accusation-draft` | GET/PUT | 草稿读取与保存（仅指控阶段） |
+| `/conversations/{conversation_id}/reply-retries` | POST | 显式重试一次失败的生成回复（仅限允许重试的降级轮次） |
 
 前端通过 `/api/v1` 代理访问本机 8000 端口，无需配置跨域通配符。
 后端用 HttpOnly 匿名 Cookie 识别访问者，写请求校验 `Origin`（默认允许 5173 和 4173 端口的
@@ -199,6 +201,29 @@ docker compose stop
 需要移除本项目容器及网络时执行 `docker compose down`，命名卷仍保留。
 不要在保留存档时加 `-v`，该参数会删除本项目数据库卷。
 容器没有配置开机自启，重启电脑后按上述步骤启动即可。
+
+### 启用模型
+
+生成默认关闭；关闭时页面与 v0.3 完全一致，每轮立即返回固定回复。启用前在 `backend/.env`
+设置以下变量（`.env.example` 有全部默认值，不要提交真实密钥）：
+
+```bash
+LLM_ENABLED=true
+LLM_ENABLED_NPCS=["NPC01"]
+LLM_BASE_URL=https://api.example.com/v1
+LLM_MODEL=（供应商与模型名）
+LLM_API_KEY=（密钥，只存于 .env）
+```
+
+- `LLM_ENABLED=true` 但 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` 缺任一项，后端启动直接失败，不静默降级。
+- 硬预算（整局不变）：单局调用 `LLM_SESSION_CALL_LIMIT=60`、单局 token `LLM_SESSION_TOKEN_LIMIT=200000`；
+  单轮时限 `LLM_TIMEOUT_SECONDS=30`，输出上限 400 token。额度用尽后只返回固定回复，重试返回 429。
+- 只有 `LLM_ENABLED_NPCS` 列表内的角色走模型，其余角色保持固定回复。
+- 密钥不进日志、API 响应或 `llm_attempt` 表；发给模型的 messages 只含该角色获准内容，
+  服务端再做泄漏词表兜底检查，命中即丢弃并回退固定回复。
+- 失败（超时、限流、无效输出、额度不足）都降级为本轮固定回复；失败轮次可由玩家显式重试，
+  至多两次，页面按钮只在服务器允许时出现。
+- 关闭方法：把 `LLM_ENABLED` 改回 `false` 并重启后端，无需清理数据。
 
 ### 检查与测试
 
@@ -370,4 +395,5 @@ uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 - [开发路线图（一人开发）](docs/16-development-roadmap.html)
 - [分阶段实现规格（v0.3～v1.0）](docs/specs/README.md)
 - [v0.3 交付记录](docs/19-v0.3-delivery.md)
+- [v0.4 交付记录](docs/20-v0.4-delivery.md)
 - [技术栈概览](tech-stack.html)
