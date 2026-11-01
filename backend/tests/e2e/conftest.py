@@ -53,7 +53,9 @@ def servers(migrated_url):
         cwd=BACKEND,
         env=env,
     )
-    web = subprocess.Popen(["npm", "run", "preview"], cwd=FRONTEND)
+    # Start vite directly: terminating the npm wrapper orphans the actual server
+    # and the next run finds the port busy.
+    web = subprocess.Popen([str(FRONTEND / "node_modules/.bin/vite"), "preview"], cwd=FRONTEND)
     try:
         wait_for(8000, api)
         wait_for(4173, web)

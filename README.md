@@ -229,7 +229,16 @@ LLM_API_KEY=（密钥，只存于 .env）
 
 ### 检查与测试
 
-先启动数据库，再分别在两个子目录内执行：
+先启动数据库，再分别在两个子目录内执行。浏览器端到端测试（后端目录）需要先构建前端并
+安装 Playwright Chromium，只在需要时显式运行（默认检查排除它们）：
+
+```bash
+cd frontend && npm run build && cd ../backend
+uv run playwright install chromium
+uv run pytest tests/e2e -m e2e
+```
+
+其余检查命令：
 
 ```bash
 cd backend
@@ -305,6 +314,46 @@ uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 注意：`alembic downgrade 0002` 会丢弃全案静态新增列与 `lie_chain`、`relationship`、
 `timeline_event` 三张表（规格只要求空库降级成功）；若在开发库执行过降级再升级，
 需要删除 `case_001` 的 `3-full` 模板行后重新执行上面的导入命令。
+
+### 部署与备份
+
+部署形态是"静态前端 + 单个后端进程 + PostgreSQL"，只有 web 一个对外端口。
+
+```bash
+# 1. 构建前端静态资源（deploy 的 nginx 挂载这个目录）
+cd frontend && npm ci && npm run build && cd ..
+
+# 2. 构建后端镜像
+docker build -t truing-api:latest -f backend/Dockerfile backend
+
+# 3. 准备部署配置
+cp backend/deploy/.env.example backend/deploy/.env
+#    编辑 backend/deploy/.env：数据库口令、ALLOWED_ORIGINS、COOKIE_SECURE 等
+
+# 4. 启动数据库与 API、web
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env up -d --wait db
+
+# 5. 一次性命令：迁移与案件导入（不随容器启动自动执行）
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env run --rm   --entrypoint "" api uv run alembic upgrade head
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env run --rm   --entrypoint "" api uv run python -m backend.import_case assets/cases/case_001/v1/case.json
+
+# 6. 启动 web 与 api
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env up -d
+```
+
+- 健康检查：`curl http://127.0.0.1:8080/api/v1/health`（进程）与
+  `curl http://127.0.0.1:8080/api/v1/ready`（数据库）。
+- HTTP 演示环境把 `COOKIE_SECURE` 设为 `false`，否则浏览器不带会话 Cookie；
+  走 HTTPS 反代时保持 `true`。
+- 升级：重新构建镜像与前端后，先 `docker compose ... up -d --wait db`，再执行第 5 步的
+  迁移命令，然后 `docker compose ... up -d` 替换 api/web。
+- 备份（与开发库相同的命令，替换端口与口令）：
+
+```bash
+docker compose -f backend/deploy/compose.yaml exec db   pg_dump -U truing -Fc -d truing > backup-$(date +%F).dump
+# 恢复：先停止 api，重建库（或删卷重建），再恢复
+cat backup-2026-11-02.dump | docker compose -f backend/deploy/compose.yaml exec -T db   pg_restore -U truing -d truing --no-owner --clean
+```
 
 ### 常见问题
 
