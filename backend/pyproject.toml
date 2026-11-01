@@ -32,6 +32,8 @@ packages = ["src/backend"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "assets/cases/case_001/v1/case.json" = "backend/case_data/case_001/v1/case.json"
+"assets/cases/case_001/v1/guard.json" = "backend/case_data/case_001/v1/guard.json"
+"assets/prompts/npc_system.v1.txt" = "backend/prompt_data/npc_system.v1.txt"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
