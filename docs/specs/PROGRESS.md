@@ -5,12 +5,13 @@
 
 ## 当前状态
 
-- 当前阶段：v0.4 已完成（本地收尾，待推送）；下一阶段 v0.5。
-- 当前分支：feat/v0.4-npc01-generation
-- 最近一次完整检查：收尾复跑（2026-11-02，干净工作区）：后端 `ruff format --check`（72 文件）、
-  `ruff check`、`pytest -q` 491 项通过 0 失败（1 项 live_llm 按默认配置排除）、`alembic check`
-  无差异；前端 `format:check`、`typecheck`、`lint`、`npm test` 28/28、`build` 全部通过。
-- 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`）、v0.4（本地，待推送）
+- 当前阶段：v0.5（验收测试已启用，实现未开始）
+- 当前分支：feat/v0.5-four-npcs-memory（自标签 v0.4 切出）
+- 最近一次完整检查：v0.5 基线（2026-11-02）：后端 pytest 因 `tests/application/test_memory.py`
+  收集期失败中断（缺 `MemorySummary` 等待实现名字）；单跑新验收集：
+  test_four_npcs 4 败 2 过、test_long_conversation 1 败、concurrency 1 败；
+  ruff format/check 通过（77 文件）、`alembic check` 无差异。前端 28/28、build 通过（无新前端验收）。
+- 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`）、v0.4（2026-11-02 打在 `33dad97`；均本地，待推送）
 
 ## 阶段清单
 
@@ -18,17 +19,28 @@
 | --- | --- | --- | --- | --- | --- |
 | v0.3 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
-| v0.5 | 否 | 否 | 否 | 否 | 否 |
+| v0.5 | 是 | 否 | 否 | 否 | 否 |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. v0.5 阶段开始（等启动者指示后进行）：从标签 `v0.4` 切分支 `feat/v0.5-<主题>`；在仓库根目录
-   执行 `cp -r docs/specs/v0.5/tests/. .` 启用验收测试并立即单独提交 "Add v0.5 acceptance tests"；
-   跑完整检查记录基线；读 docs/specs/v0.5/spec.md 按任务编号拆 2～4 小时任务写回本节。
-2. 推送与人工事项见下节：v0.3/v0.4 的本地提交与标签待推送；真实模型评测（v0.4 第 8 节）
-   需凭据后补做。
+1. T19 授权段与迁移 0005：`authorization_fingerprint`（当前说法+本人已披露知识 ID+出示且持有的
+   证据 ID，规范 JSON sha256；压力/信任/情绪/回避不参与）；迁移 0005（`npc_state.memory_epoch`、
+   `npc_memory_summary` 表按 12 篇 6.2）；业务事务结束前比较全部可审讯人物前后指纹，
+   变化者 `memory_epoch += 1` 并失效摘要（`summary_revision += 1` 清内容与游标）；
+   `conversation.response_plan_json` 冻结该轮 `memory_epoch`；`HistoryRound` 增加
+   `player_message_id`/`npc_message_id`；`build_context` 只取 `memory_epoch` 等于当前值的历史。
+2. T20 摘要与预算：`SummaryItem`/`MemorySummary`/`message_hash`/`summarize`/`summary_is_valid`
+   （摘录不归纳、每条 ≤80 字、从最新往前取到 `max_tokens=300`、`covered_through_seq` 不进最近 6 轮、
+   篡改整份丢弃）；`npc_memory_summary` 读→验→条件更新（失败不重试；表坏照常生成）；
+   摘要作为紧跟 system 的第一条 user 消息；`ContextBudget` 增 `max_history_tokens=1100`、
+   `max_summary_tokens=300` 与三层丢弃顺序。让 `test_memory.py` 全绿。
+3. T21 四角色与交付：`llm_enabled_npcs` 默认四人；`SessionView.session.generation_available`；
+   额度耗尽全员受理即 FALLBACK `GENERATION_BUDGET_EXHAUSTED`、重试 429、调查/指控照常；
+   前端提示"已切换为固定回复"。让 `test_four_npcs.py`、`test_long_conversation.py`、
+   `test_shared_gateway_concurrency.py` 转绿。真实评测（第 5 节）无凭据则交付记录写"未执行"；
+   docs/21-v0.5-delivery.md、README 增补；干净工作区全检查；打 v0.5 标签。
 
 ## 阻塞与需要人处理的事项
 
@@ -41,6 +53,10 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.5 · v0.4..2929eb0（阶段开始：6 个验收文件入库，1900 行）。
+  基线：后端 pytest 因 test_memory.py 收集错误中断（缺 MemorySummary 等）；单跑：
+  test_four_npcs 4 败 2 过、test_long_conversation 1 败、concurrency 1 败；
+  ruff 与 alembic check 通过；前端 28/28 不变。下一步 T19。
 - 2026-11-02 · v0.4 · e83f0a8..HEAD（T18：前端轮询与交付收尾）。页面每 1.5 秒轮询待定轮次、
   终态/离开审讯/卸载停止，fallback-notice 与 retry-reply 按钮（新幂等键，至多两次）。
   交付记录 docs/20-v0.4-delivery.md（真实样本评测无凭据，如实写"未执行"）；README"启用模型"
