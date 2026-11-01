@@ -236,6 +236,13 @@ LLM_API_KEY=（密钥，只存于 .env）
 cd frontend && npm run build && cd ../backend
 uv run playwright install chromium
 uv run pytest tests/e2e -m e2e
+uv run pytest tests/performance -m performance
+```
+
+真实模型评测（可选，需要模型服务凭据与预算，默认跳过）：
+
+```bash
+RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm
 ```
 
 其余检查命令：
