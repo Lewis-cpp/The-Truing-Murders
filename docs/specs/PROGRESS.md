@@ -20,17 +20,29 @@
 | v0.3 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.5 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
+| v0.6 | 是 | 否 | 否 | 否 | 否 |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. v0.6 阶段开始（下一轮次直接执行）：从标签 `v0.5` 切分支 `feat/v0.6-<主题>`；在仓库根目录
-   执行 `cp -r docs/specs/v0.6/tests/. .` 启用验收测试并立即单独提交 "Add v0.6 acceptance tests"；
-   跑完整检查记录基线；读 docs/specs/v0.6/spec.md 按任务编号拆 2～4 小时任务写回本节。
-   v0.6 引入新依赖（前端 echarts、后端 dev playwright），需更新锁文件。
-2. 补做真实模型评测：v0.4（npc01）与 v0.5（four_npcs）的 live 评测均因无凭据未执行，
-   配置凭据后 `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm` 补做并把报告计入交付。
+1. T22 关系图、时间线与指控表单契约：前端安装 `echarts`（锁文件）；`composables/relationshipGraph.ts`
+   的 `graphOption`（graph 系列，data/links 恰好等于后端投影，TESTIMONY/UNVERIFIED 虚线）与
+   `composables/timeline.ts` 的 `timelineRows`（UNKNOWN 加"时间未知："前缀、badge 已核验/证词/存疑、
+   conflicts 取标题）；组件 `relationship-graph`（SVG 渲染）始终伴随 `relationship-list` 文字列表、
+   `timeline-list` 每行带 badge 文字与冲突提示；指控表单测试契约 `option-*`/`step-*`（按勾选先后排序）/
+   `cite-check-*`/`link-*`/`accusation-explanation`；ACCUSATION 阶段 `cite-{evidence_id}` 联动；
+   复盘面板列真相步骤与 `missing_evidence_ids`。让 graph-timeline.test.ts 转绿。
+2. T23 恢复交互与演练：前端 recovery.test.ts（聊天/出示/草稿/重试回复的不确定结果先查
+   `GET /requests/{id}`，404 原键重试，三类冲突不清空表单）；修订演练 1 的测试管线 cookie 缺陷
+   （记入 docs/specs/v0.6/test-amendments.md）并确认 503 `PERSISTENCE_UNAVAILABLE` 路径；
+   备份演练本机无 pg_dump 18 则按规格 skip 并在交付记录写明手动演练命令与结果。
+3. T24 部署、E2E 与性能：`backend/Dockerfile`（slim、`uv sync --locked --no-dev`、非 root）、
+   `backend/deploy/compose.yaml`（db/api/web，nginx 挂载 dist 并反代 /api/v1/）、nginx.conf 与
+   deploy/.env.example；README"部署与备份"；后端 dev 加 `playwright`（锁文件）并按 README/CI 装
+   Chromium；`uv run pytest tests/e2e -m e2e` 跑三结局、无招供与恢复路径；性能测试 5 会话 P95 ≤ 1.0s，
+   报告写 `backend/reports/performance/`（不入库）；`docs/traceability.md`（FR-01～19、NFR-01～11）让
+   test_traceability 转绿；CI 增 e2e 任务；docs/22-v0.6-delivery.md；打 v0.6 标签、冻结新增玩法。
 
 ## 阻塞与需要人处理的事项
 
@@ -43,6 +55,10 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.6 · v0.5..HEAD（阶段开始：7 个验收文件入库 + pytest 切 importlib 模式）。
+  基线：后端 516 过 2 败 1 跳过（演练 1 管线缺陷、traceability 未建；备份演练 skip 待 pg_dump 18；
+  deselect：e2e 4、live 2、performance 1）；前端 28 过 2 败（graph-timeline、recovery）。
+  ruff 与 alembic check 通过。下一步 T22。
 - 2026-11-02 · v0.5 · 2929eb0..HEAD（T19～T21：授权段、摘要、四角色与交付）。
   迁移 0005（memory_epoch + npc_memory_summary）；指纹推进与摘要失效同事务；摘录式摘要
   （80 字/条、300 token、整份校验）与三层预算（1100/300/4000）；四角色默认共享生成、
