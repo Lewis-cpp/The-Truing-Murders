@@ -1,4 +1,4 @@
-"""Maps the validated slice definition to static tables and assembles it back."""
+"""Maps the validated case definition (schema 3) to static tables and assembles it back."""
 
 import json
 import uuid
@@ -13,15 +13,23 @@ from backend.infrastructure.database.models import (
     Character,
     CharacterSecret,
     Evidence,
-    EvidenceDependency,
+    LieChain,
     LieRule,
+    Relationship,
     Scene,
+    TimelineEvent,
 )
 
 
-def _split_label(label: str) -> tuple[str, str]:
-    name, _, identity = label.partition(" · ")
-    return name, identity or name
+def knowledge_speaker_of(case: Case, knowledge_id: str) -> str | None:
+    """ASKED knowledge is spoken by its topic's NPC, ADMITTED by the layer that reveals it."""
+    topic = next((t for t in case.interrogation.topics if t.knowledge_id == knowledge_id), None)
+    if topic is not None:
+        return topic.npc_id
+    lie = next((lie for lie in case.lies if lie.admitted_knowledge_id == knowledge_id), None)
+    if lie is not None:
+        return lie.npc_id
+    return None
 
 
 class CaseRepository:
@@ -51,7 +59,7 @@ class CaseRepository:
             case_id=case.case_id,
             version=case.version,
             title=case.title,
-            synopsis=case.introduction,
+            synopsis=case.synopsis,
             status="DRAFT",
             definition_schema_version=case.schema_version,
             definition_scope=case.scope,
@@ -65,51 +73,68 @@ class CaseRepository:
             },
             scoring_policy_json=case.scoring.model_dump(mode="json"),
             rules_json={
-                "present_effects": [
-                    {"lie_rule_id": case.lie.id, **effect.model_dump(mode="json")}
-                    for effect in case.lie.effects
-                ],
                 "interrogation": case.interrogation.model_dump(mode="json"),
+                "present_effects": [
+                    {"lie_rule_id": lie.id, **effect.model_dump(mode="json")}
+                    for lie in case.lies
+                    for effect in lie.effects
+                ],
             },
             public_knowledge_json=[
                 k.model_dump(mode="json") for k in case.knowledge if k.disclosure == "PUBLIC"
             ],
+            timeline_origin_label=case.timeline_origin_label,
+            show_key_badges=case.show_key_badges,
+            deep_unlock_json=case.deep_unlock.model_dump(mode="json"),
+            introduction=case.introduction,
             created_at=now,
         )
         self._db.add(template)
         self._db.flush()
 
-        for order, choice in enumerate(case.suspects):
-            npc = case.npc if choice.id == case.npc.id else None
-            name, identity = _split_label(choice.label)
+        granting_scene = {
+            action.evidence_id: scene.id for scene in case.scenes for action in scene.actions
+        }
+        for order, character in enumerate(case.characters):
             self._db.add(
                 Character(
                     template_id=template_id,
-                    character_id=choice.id,
-                    name=npc.name if npc else name,
-                    role="SUSPECT",
-                    public_identity=npc.role if npc else identity,
+                    character_id=character.id,
+                    name=character.name,
+                    role="SUSPECT" if character.interrogatable else "VICTIM",
+                    public_identity=character.public_identity,
                     sort_order=order,
-                    is_interrogatable=npc is not None,
-                    initial_pressure=npc.initial_pressure if npc else None,
-                    initial_trust=npc.initial_trust if npc else None,
+                    is_interrogatable=character.interrogatable,
+                    initial_pressure=character.initial_pressure,
+                    initial_trust=character.initial_trust,
+                    role_label=character.role,
+                    personality=character.personality,
+                    speech_style=character.speech_style,
+                    default_reply=character.default_reply,
+                    core_lie_ids_json=list(character.core_lie_ids),
                 )
             )
-        self._db.add(
-            Scene(
-                template_id=template_id,
-                scene_id=case.scene.id,
-                name=case.scene.name,
-                description=case.scene.description,
-                sort_order=0,
-                actions_json=[
-                    {"id": a.id, "label": a.label, "evidence_id": a.evidence_id}
-                    for a in case.scene.actions
-                ],
+        for order, scene in enumerate(case.scenes):
+            self._db.add(
+                Scene(
+                    template_id=template_id,
+                    scene_id=scene.id,
+                    name=scene.name,
+                    description=scene.description,
+                    sort_order=order,
+                    unlock_json=scene.unlock.model_dump(mode="json"),
+                    actions_json=[
+                        {
+                            "id": action.id,
+                            "label": action.label,
+                            "evidence_id": action.evidence_id,
+                            "requires": action.requires.model_dump(mode="json"),
+                        }
+                        for action in scene.actions
+                    ],
+                )
             )
-        )
         self._db.flush()
-
         for order, evidence in enumerate(case.evidence):
             self._db.add(
                 Evidence(
@@ -119,10 +144,12 @@ class CaseRepository:
                     content=evidence.content,
                     source_label=evidence.source,
                     source_type="SCENE",
-                    source_scene_id=case.scene.id,
+                    source_scene_id=granting_scene[evidence.id],
                     source_character_id=None,
                     initial_credibility=evidence.credibility,
                     sort_order=order,
+                    kind=evidence.kind,
+                    is_key=evidence.is_key,
                 )
             )
         for knowledge in case.knowledge:
@@ -132,7 +159,7 @@ class CaseRepository:
                 CharacterSecret(
                     template_id=template_id,
                     secret_id=knowledge.id,
-                    character_id=knowledge.known_by[0],
+                    character_id=knowledge_speaker_of(case, knowledge.id),
                     content=knowledge.content,
                     known_by_json=list(knowledge.known_by),
                     assertion_kind="TESTIMONY",
@@ -140,42 +167,81 @@ class CaseRepository:
                     disclosure=knowledge.disclosure,
                 )
             )
-        self._db.flush()
-
-        # The slice keeps dependencies on actions; the table keys them by granted evidence.
-        dependencies: dict[str, tuple] = {}
-        for action in case.scene.actions:
-            key = (tuple(action.requires.all_of), tuple(action.requires.any_of))
-            if dependencies.setdefault(action.evidence_id, key) != key:
-                raise ValueError("授予同一证据的调查动作必须使用相同的前置证据。")
-        for evidence_id, (all_of, any_of) in dependencies.items():
-            for mode, refs in (("ALL", all_of), ("ANY", any_of)):
-                for required in refs:
-                    self._db.add(
-                        EvidenceDependency(
-                            template_id=template_id,
-                            evidence_id=evidence_id,
-                            dependency_mode=mode,
-                            required_evidence_id=required,
-                        )
-                    )
-        lie = case.lie
-        self._db.add(
-            LieRule(
-                template_id=template_id,
-                lie_rule_id=lie.id,
-                character_id=lie.npc_id,
-                priority=0,
-                statements_json=lie.statements.model_dump(mode="json"),
-                counterevidence_json=lie.counterevidence.model_dump(mode="json"),
-                admission_condition_json={
-                    "presented": lie.admission_presented.model_dump(mode="json"),
-                    "pressure_min": lie.admission_pressure_min,
-                    "trust_min": lie.admission_trust_min,
-                },
-                on_admitted_json={"knowledge_id": lie.admitted_knowledge_id},
+        chain_position = {
+            lie_id: (chain.id, index)
+            for chain in case.lie_chains
+            for index, lie_id in enumerate(chain.lie_ids)
+        }
+        for order, chain in enumerate(case.lie_chains):
+            self._db.add(
+                LieChain(
+                    template_id=template_id,
+                    chain_id=chain.id,
+                    character_id=chain.npc_id,
+                    lie_ids_json=list(chain.lie_ids),
+                    sort_order=order,
+                )
             )
-        )
+        for lie in case.lies:
+            _, position = chain_position[lie.id]
+            self._db.add(
+                LieRule(
+                    template_id=template_id,
+                    lie_rule_id=lie.id,
+                    character_id=lie.npc_id,
+                    priority=position,
+                    statements_json=lie.statements.model_dump(mode="json"),
+                    counterevidence_json=lie.counterevidence.model_dump(mode="json"),
+                    admission_condition_json={
+                        "presented": lie.admission_presented.model_dump(mode="json"),
+                        "pressure_min": lie.admission_pressure_min,
+                        "trust_min": lie.admission_trust_min,
+                    },
+                    on_admitted_json={"knowledge_id": lie.admitted_knowledge_id},
+                )
+            )
+        for order, relationship in enumerate(case.relationships):
+            self._db.add(
+                Relationship(
+                    template_id=template_id,
+                    relationship_id=relationship.id,
+                    from_character_id=relationship.from_id,
+                    to_character_id=relationship.to_id,
+                    relationship_type=relationship.type,
+                    directed=relationship.directed,
+                    description=relationship.description,
+                    assertion_kind=relationship.assertion_kind,
+                    credibility=relationship.credibility,
+                    source_kind=relationship.source_kind,
+                    source_id=relationship.source_id,
+                    reveal_evidence_ids_json=list(relationship.reveal_evidence_ids),
+                    reveal_knowledge_ids_json=list(relationship.reveal_knowledge_ids),
+                    sort_order=order,
+                )
+            )
+        for order, event in enumerate(case.timeline):
+            self._db.add(
+                TimelineEvent(
+                    template_id=template_id,
+                    timeline_event_id=event.id,
+                    title=event.title,
+                    description=event.description,
+                    scene_id=event.scene_id,
+                    participant_ids_json=list(event.participant_ids),
+                    precision=event.precision,
+                    start_minutes=event.start_minutes,
+                    end_minutes=event.end_minutes,
+                    time_label=event.time_label,
+                    assertion_kind=event.assertion_kind,
+                    credibility=event.credibility,
+                    source_kind=event.source_kind,
+                    source_id=event.source_id,
+                    reveal_evidence_ids_json=list(event.reveal_evidence_ids),
+                    reveal_knowledge_ids_json=list(event.reveal_knowledge_ids),
+                    conflicts_with_json=list(event.conflicts_with),
+                    sort_order=order,
+                )
+            )
         self._db.flush()
         return template
 
@@ -188,44 +254,15 @@ class CaseRepository:
                 self._db.scalars(select(table).where(table.template_id == tid).order_by(*order))
             )
 
-        characters = rows(Character, Character.sort_order)
+        characters = rows(Character, Character.sort_order, Character.character_id)
         scenes = rows(Scene, Scene.sort_order, Scene.scene_id)
-        evidence = rows(Evidence, Evidence.sort_order)
+        evidence = rows(Evidence, Evidence.sort_order, Evidence.evidence_id)
         secrets = rows(CharacterSecret, CharacterSecret.secret_id)
+        chains = rows(LieChain, LieChain.sort_order, LieChain.chain_id)
         lies = rows(LieRule, LieRule.priority, LieRule.lie_rule_id)
-        dependencies = rows(
-            EvidenceDependency,
-            EvidenceDependency.evidence_id,
-            EvidenceDependency.dependency_mode,
-            EvidenceDependency.required_evidence_id,
-        )
-        npcs = [c for c in characters if c.is_interrogatable]
-        if len(scenes) != 1 or len(npcs) != 1 or len(lies) != 1:
-            raise ValueError("切片定义必须恰好包含 1 个场景、1 个可审讯角色和 1 层谎言。")
-        scene, npc, lie = scenes[0], npcs[0], lies[0]
+        relationships = rows(Relationship, Relationship.sort_order, Relationship.relationship_id)
+        timeline = rows(TimelineEvent, TimelineEvent.sort_order, TimelineEvent.timeline_event_id)
 
-        def requires(evidence_id: str) -> dict:
-            group = {"ALL": [], "ANY": []}
-            for dependency in dependencies:
-                if dependency.evidence_id == evidence_id:
-                    group[dependency.dependency_mode].append(dependency.required_evidence_id)
-            return {"all_of": group["ALL"], "any_of": group["ANY"]}
-
-        effects = [
-            {k: v for k, v in effect.items() if k != "lie_rule_id"}
-            for effect in template.rules_json["present_effects"]
-            if effect["lie_rule_id"] == lie.lie_rule_id
-        ]
-        admission = lie.admission_condition_json
-        knowledge = list(template.public_knowledge_json) + [
-            {
-                "id": s.secret_id,
-                "content": s.content,
-                "known_by": s.known_by_json,
-                "disclosure": s.disclosure,
-            }
-            for s in secrets
-        ]
         definition = {
             "schema_version": template.definition_schema_version,
             "scope": template.definition_scope,
@@ -233,48 +270,126 @@ class CaseRepository:
             "version": template.version,
             "rules_version": template.rules_version,
             "title": template.title,
-            "introduction": template.synopsis,
+            "synopsis": template.synopsis,
+            "introduction": template.introduction,
             "review_status": template.review_status,
-            "scene": {
-                "id": scene.scene_id,
-                "name": scene.name,
-                "description": scene.description,
-                "actions": [
-                    {**action, "requires": requires(action["evidence_id"])}
-                    for action in scene.actions_json
-                ],
-            },
-            "npc": {
-                "id": npc.character_id,
-                "name": npc.name,
-                "role": npc.public_identity,
-                "initial_pressure": npc.initial_pressure,
-                "initial_trust": npc.initial_trust,
-            },
-            **template.accusation_options_json,
+            "timeline_origin_label": template.timeline_origin_label,
+            "show_key_badges": template.show_key_badges,
+            "characters": [
+                {
+                    "id": c.character_id,
+                    "name": c.name,
+                    "role": c.role_label,
+                    "public_identity": c.public_identity,
+                    "personality": c.personality,
+                    "speech_style": c.speech_style,
+                    "interrogatable": c.is_interrogatable,
+                    "initial_pressure": c.initial_pressure,
+                    "initial_trust": c.initial_trust,
+                    "core_lie_ids": c.core_lie_ids_json or [],
+                    "default_reply": c.default_reply,
+                }
+                for c in characters
+            ],
+            "scenes": [
+                {
+                    "id": scene.scene_id,
+                    "name": scene.name,
+                    "description": scene.description,
+                    "unlock": scene.unlock_json,
+                    "actions": scene.actions_json,
+                }
+                for scene in scenes
+            ],
             "evidence": [
                 {
                     "id": e.evidence_id,
                     "title": e.name,
+                    "kind": e.kind,
                     "content": e.content,
                     "source": e.source_label,
                     "credibility": e.initial_credibility,
+                    "is_key": e.is_key,
                 }
                 for e in evidence
             ],
-            "knowledge": knowledge,
-            "lie": {
-                "id": lie.lie_rule_id,
-                "npc_id": lie.character_id,
-                "counterevidence": lie.counterevidence_json,
-                "admission_presented": admission["presented"],
-                "admission_pressure_min": admission["pressure_min"],
-                "admission_trust_min": admission["trust_min"],
-                "statements": lie.statements_json,
-                "admitted_knowledge_id": lie.on_admitted_json["knowledge_id"],
-                "effects": effects,
-            },
+            "knowledge": list(template.public_knowledge_json)
+            + [
+                {
+                    "id": s.secret_id,
+                    "content": s.content,
+                    "known_by": s.known_by_json,
+                    "disclosure": s.disclosure,
+                }
+                for s in secrets
+            ],
+            "lies": [
+                {
+                    "id": lie.lie_rule_id,
+                    "npc_id": lie.character_id,
+                    "counterevidence": lie.counterevidence_json,
+                    "admission_presented": lie.admission_condition_json["presented"],
+                    "admission_pressure_min": lie.admission_condition_json["pressure_min"],
+                    "admission_trust_min": lie.admission_condition_json["trust_min"],
+                    "statements": lie.statements_json,
+                    "admitted_knowledge_id": lie.on_admitted_json["knowledge_id"],
+                    "effects": [
+                        {k: v for k, v in effect.items() if k != "lie_rule_id"}
+                        for effect in template.rules_json["present_effects"]
+                        if effect["lie_rule_id"] == lie.lie_rule_id
+                    ],
+                }
+                for lie in lies
+            ],
+            "lie_chains": [
+                {
+                    "id": chain.chain_id,
+                    "npc_id": chain.character_id,
+                    "lie_ids": chain.lie_ids_json,
+                }
+                for chain in chains
+            ],
             "interrogation": template.rules_json["interrogation"],
+            "deep_unlock": template.deep_unlock_json,
+            "relationships": [
+                {
+                    "id": r.relationship_id,
+                    "from_id": r.from_character_id,
+                    "to_id": r.to_character_id,
+                    "type": r.relationship_type,
+                    "directed": r.directed,
+                    "description": r.description,
+                    "assertion_kind": r.assertion_kind,
+                    "credibility": r.credibility,
+                    "source_kind": r.source_kind,
+                    "source_id": r.source_id,
+                    "reveal_evidence_ids": r.reveal_evidence_ids_json,
+                    "reveal_knowledge_ids": r.reveal_knowledge_ids_json,
+                }
+                for r in relationships
+            ],
+            "timeline": [
+                {
+                    "id": t.timeline_event_id,
+                    "title": t.title,
+                    "description": t.description,
+                    "scene_id": t.scene_id,
+                    "participant_ids": t.participant_ids_json,
+                    "precision": t.precision,
+                    "start_minutes": t.start_minutes,
+                    "end_minutes": t.end_minutes,
+                    "time_label": t.time_label,
+                    "assertion_kind": t.assertion_kind,
+                    "credibility": t.credibility,
+                    "source_kind": t.source_kind,
+                    "source_id": t.source_id,
+                    "reveal_evidence_ids": t.reveal_evidence_ids_json,
+                    "reveal_knowledge_ids": t.reveal_knowledge_ids_json,
+                    "conflicts_with": t.conflicts_with_json,
+                }
+                for t in timeline
+            ],
+            **template.accusation_options_json,
             "truth": template.truth_json,
             "scoring": template.scoring_policy_json,
         }

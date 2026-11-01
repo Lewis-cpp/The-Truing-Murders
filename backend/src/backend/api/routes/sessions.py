@@ -1,10 +1,10 @@
-"""Session resources for the W1 slice. Writes carry Idempotency-Key and expected versions."""
+"""Session resources. Writes carry Idempotency-Key and expected versions; GETs never write."""
 
 from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -58,6 +58,91 @@ def load_session(session_id: UUID, visitor: Visitor, game: Game) -> dict:
 @router.get("/requests/{request_id}", response_model=rs.RequestRecord)
 def request_record(request_id: UUID, visitor: Visitor, game: Game) -> dict:
     return game.request_record(visitor, request_id)
+
+
+# Read-only game resources; every GET is a projection and never writes.
+
+
+@router.get("/sessions/{session_id}/scenes", response_model=rs.View[rs.SceneList])
+def list_scenes(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.scene_views(visitor, session_id)
+
+
+@router.get("/sessions/{session_id}/scenes/{scene_id}", response_model=rs.View[rs.SceneView])
+def scene_detail(session_id: UUID, scene_id: str, visitor: Visitor, game: Game) -> dict:
+    return game.scene_detail(visitor, session_id, scene_id)
+
+
+@router.get("/sessions/{session_id}/evidence", response_model=rs.View[rs.EvidenceList])
+def list_evidence(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.evidence_views(visitor, session_id)
+
+
+@router.get(
+    "/sessions/{session_id}/evidence/{evidence_id}", response_model=rs.View[rs.EvidenceView]
+)
+def evidence_detail(session_id: UUID, evidence_id: str, visitor: Visitor, game: Game) -> dict:
+    return game.evidence_detail(visitor, session_id, evidence_id)
+
+
+@router.get("/sessions/{session_id}/npcs", response_model=rs.View[rs.NpcList])
+def list_npcs(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.npc_views(visitor, session_id)
+
+
+@router.get("/sessions/{session_id}/npcs/{npc_id}", response_model=rs.View[rs.NpcView])
+def npc_detail(session_id: UUID, npc_id: str, visitor: Visitor, game: Game) -> dict:
+    return game.npc_detail(visitor, session_id, npc_id)
+
+
+@router.get("/sessions/{session_id}/relationships", response_model=rs.View[rs.RelationshipGraph])
+def relationships(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.relationship_graph(visitor, session_id)
+
+
+@router.get("/sessions/{session_id}/timeline", response_model=rs.View[rs.TimelineView])
+def timeline(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.timeline_view(visitor, session_id)
+
+
+@router.get(
+    "/sessions/{session_id}/accusation-options", response_model=rs.View[rs.AccusationOptions]
+)
+def accusation_options(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.accusation_options_view(visitor, session_id)
+
+
+@router.get("/sessions/{session_id}/accusation-draft", response_model=rs.View[rs.DraftResult])
+def get_accusation_draft(session_id: UUID, visitor: Visitor, game: Game) -> dict:
+    return game.accusation_draft_view(visitor, session_id)
+
+
+@router.get(
+    "/sessions/{session_id}/npcs/{npc_id}/conversations",
+    response_model=rs.View[rs.ConversationPage],
+)
+def conversation_history(
+    session_id: UUID,
+    npc_id: str,
+    visitor: Visitor,
+    game: Game,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    before_seq: Annotated[int | None, Query(ge=1)] = None,
+) -> dict:
+    return game.conversation_page(visitor, session_id, npc_id, limit, before_seq)
+
+
+@router.get(
+    "/sessions/{session_id}/conversations/{conversation_id}",
+    response_model=rs.View[rs.ConversationView],
+)
+def conversation_detail(
+    session_id: UUID, conversation_id: UUID, visitor: Visitor, game: Game
+) -> dict:
+    return game.conversation_detail(visitor, session_id, conversation_id)
+
+
+# Writes
 
 
 @router.post(
@@ -123,7 +208,8 @@ def chat(
     game: Game,
     commands: Commands,
 ) -> JSONResponse:
-    result = game.chat(visitor, session_id, commands(body.model_dump(mode="json")), npc_id)
+    command = commands(body.model_dump(mode="json"))
+    result = game.chat(visitor, session_id, command, npc_id, body.message)
     return respond(result, rs.ActionResult[rs.ChatResult])
 
 
@@ -161,7 +247,9 @@ def present_evidence(
     commands: Commands,
 ) -> JSONResponse:
     command = commands(body.model_dump(mode="json"))
-    result = game.present(visitor, session_id, command, npc_id, body.evidence_id)
+    result = game.present(
+        visitor, session_id, command, npc_id, body.evidence_id, body.comment or None
+    )
     return respond(result, rs.ActionResult[rs.PresentationResult])
 
 
@@ -184,6 +272,23 @@ def point_contradiction(
         visitor, session_id, command, npc_id, body.knowledge_id, body.evidence_id
     )
     return respond(result, rs.ActionResult[rs.ContradictionResult])
+
+
+@router.put(
+    "/sessions/{session_id}/accusation-draft",
+    response_model=rs.ActionResult[rs.DraftResult],
+    **WRITE,
+)
+def save_accusation_draft(
+    session_id: UUID,
+    body: rq.SaveDraftRequest,
+    visitor: Visitor,
+    game: Game,
+    commands: Commands,
+) -> JSONResponse:
+    command = commands(body.model_dump(mode="json"))
+    result = game.save_draft(visitor, session_id, command, body.model_dump(mode="json")["content"])
+    return respond(result, rs.ActionResult[rs.DraftResult])
 
 
 @router.put(

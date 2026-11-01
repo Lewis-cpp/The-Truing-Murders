@@ -10,6 +10,7 @@ Phase = Literal[
     "INVESTIGATION", "INTERROGATION", "DEEP_INVESTIGATION", "ACCUSATION", "REVIEW", "FINISHED"
 ]
 Credibility = Literal["UNVERIFIED", "VERIFIED", "DISPUTED", "REFUTED"]
+EvidenceKind = Literal["PHYSICAL", "DOCUMENT", "TESTIMONY", "DIGITAL"]
 
 
 class ApiError(BaseModel):
@@ -71,24 +72,36 @@ class SceneView(BaseModel):
     actions: list[InvestigationOption]
 
 
+class SceneList(BaseModel):
+    items: list[SceneView]
+
+
 class PublicSource(BaseModel):
     kind: Literal["SCENE", "NPC", "EVIDENCE", "PUBLIC"]
     id: str | None
     label: str
 
 
+class InformationRef(BaseModel):
+    kind: Literal["EVIDENCE", "KNOWLEDGE", "RELATIONSHIP", "TIMELINE_EVENT"]
+    id: str
+
+
 class EvidenceView(BaseModel):
     evidence_id: str
     name: str
+    kind: EvidenceKind
     content: str
     source: PublicSource
     credibility: Credibility
-    discovered_at: datetime
+    discovered_at: datetime | None
+    key_badge: bool
+    known_conflicts: list[InformationRef]
+    links: list[dict]
 
 
-class InformationRef(BaseModel):
-    kind: Literal["KNOWLEDGE"]
-    id: str
+class EvidenceList(BaseModel):
+    items: list[EvidenceView]
 
 
 class KnownInformation(BaseModel):
@@ -98,6 +111,7 @@ class KnownInformation(BaseModel):
     source: PublicSource
     credibility: Credibility
     discovered_at: datetime | None
+    known_conflicts: list[InformationRef]
 
 
 class TopicView(BaseModel):
@@ -118,7 +132,12 @@ class NpcView(BaseModel):
     display_state: str
     fixed_statement: str | None
     presented_evidence_ids: list[str]
+    known_statements: list[KnownInformation]
     topics: list[TopicView]
+
+
+class NpcList(BaseModel):
+    items: list[NpcView]
 
 
 class Option(BaseModel):
@@ -140,6 +159,73 @@ class AccusationOptions(BaseModel):
     process_constraints: ProcessConstraints
 
 
+class RelationshipNode(BaseModel):
+    character_id: str
+    name: str
+    role: str
+    public_identity: str
+
+
+class RelationshipEdge(BaseModel):
+    relationship_id: str
+    from_character_id: str
+    to_character_id: str
+    relationship_type: str
+    directed: bool
+    description: str
+    assertion_kind: Literal["FACT", "TESTIMONY"]
+    source: PublicSource
+    credibility: Credibility
+    discovered_at: datetime | None
+    known_conflicts: list[InformationRef]
+
+
+class RelationshipGraph(BaseModel):
+    nodes: list[RelationshipNode]
+    edges: list[RelationshipEdge]
+
+
+class TimelineItem(BaseModel):
+    timeline_event_id: str
+    title: str
+    description: str
+    scene_id: str | None
+    participant_ids: list[str]
+    time_precision: Literal["EXACT", "RANGE", "UNKNOWN"]
+    time_start_minutes: int | None
+    time_end_minutes: int | None
+    time_label: str
+    assertion_kind: Literal["FACT", "TESTIMONY"]
+    source: PublicSource
+    credibility: Credibility
+    discovered_at: datetime | None
+    known_conflicts: list[InformationRef]
+
+
+class TimelineView(BaseModel):
+    origin_label: str
+    items: list[TimelineItem]
+
+
+class StepEvidenceLink(BaseModel):
+    step_id: str
+    evidence_id: str
+
+
+class AccusationContent(BaseModel):
+    suspect_character_id: str | None
+    weapon_option_id: str | None
+    motive_option_id: str | None
+    ordered_process_step_ids: list[str]
+    cited_evidence_ids: list[str]
+    step_evidence_links: list[StepEvidenceLink]
+    explanation: str
+
+
+class DraftResult(BaseModel):
+    content: AccusationContent
+
+
 class SessionView(BaseModel):
     session: SessionSummary
     intro_text: str
@@ -147,7 +233,11 @@ class SessionView(BaseModel):
     evidence: list[EvidenceView]
     npcs: list[NpcView]
     known_information: list[KnownInformation]
+    relationships: RelationshipGraph
+    timeline: TimelineView
     accusation_options: AccusationOptions
+    accusation_draft: AccusationContent
+    pending_conversations: list[dict]
 
 
 class CurrentSessionView(BaseModel):
@@ -159,7 +249,11 @@ class PlayerOutcome(BaseModel):
     reason_code: str
     summary: str
     new_evidence: list[EvidenceView]
+    updated_evidence: list[EvidenceView]
     disclosed_information: list[KnownInformation]
+    unlocked_scenes: list[SceneView]
+    relationships_changed: bool
+    timeline_changed: bool
     npc: NpcView | None
 
 
@@ -170,8 +264,9 @@ class InvestigationResult(BaseModel):
 
 
 class ChatResult(BaseModel):
-    npc_id: str
-    fixed_reply: str
+    """The chat receipt per spec 5.2: only the new round's identity."""
+
+    conversation_id: str
 
 
 class QuestionResult(BaseModel):
@@ -196,19 +291,39 @@ class ContradictionResult(BaseModel):
     outcome: PlayerOutcome
 
 
-class StepEvidenceLink(BaseModel):
-    step_id: str
-    evidence_id: str
+class MessageView(BaseModel):
+    message_id: str
+    sequence_no: int
+    speaker: Literal["PLAYER", "NPC", "HOST", "REVIEW"]
+    content: str
+    origin: Literal["PLAYER", "LLM", "FIXED"]
+    validity: Literal["VALID", "STALE"]
+    created_at: datetime
+    updated_at: datetime
 
 
-class AccusationContent(BaseModel):
-    suspect_character_id: str
-    weapon_option_id: str
-    motive_option_id: str
-    ordered_process_step_ids: list[str]
-    cited_evidence_ids: list[str]
-    step_evidence_links: list[StepEvidenceLink]
-    explanation: str
+class ConversationView(BaseModel):
+    conversation_id: str
+    conversation_seq: int
+    session_id: UUID
+    npc_id: str | None
+    request_id: str
+    interaction_type: Literal["CHAT", "EVIDENCE_PRESENTATION"]
+    source_state_version: int
+    generation_status: str
+    generation_deadline_at: datetime | None
+    deadline_exceeded: bool
+    fixed_reply: str
+    messages: list[MessageView]
+    fallback_reason: str | None
+    can_retry_reply: bool
+    created_at: datetime
+    completed_at: datetime | None
+
+
+class ConversationPage(BaseModel):
+    items: list[ConversationView]
+    next_before_seq: int | None
 
 
 class CriterionResult(BaseModel):
@@ -218,12 +333,14 @@ class CriterionResult(BaseModel):
     score: str
     max_score: str
     explanation: str
+    missing_evidence_ids: list[str]
 
 
 class Verdict(BaseModel):
     category: Literal["CORRECT", "PARTIALLY_CORRECT", "INCORRECT"]
     score: str
     max_score: str
+    fixed_explanation: str
     criteria: list[CriterionResult]
 
 
@@ -278,7 +395,7 @@ class ActionResult[T](BaseModel):
     active_npc_id_after: str | None
     saved_at: datetime
     data: T
-    conversation: None = None
+    conversation: ConversationView | None = None
 
 
 class RequestRecord(BaseModel):

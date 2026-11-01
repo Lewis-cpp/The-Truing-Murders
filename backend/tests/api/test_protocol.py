@@ -69,14 +69,17 @@ def test_repeated_presentation_with_new_keys_adds_no_second_effect(client):
     first = player.present("E01").json()
     second = player.present("E01").json()
     assert first["state_changed"] is True
-    assert second["business_status"] == "NOOP"
+    # The repeated show is state-neutral but still records one conversation round.
+    assert second["state_changed"] is False
+    assert second["business_status"] == "COMMITTED"
     assert second["data"]["outcome"]["reason_code"] == "ALREADY_PRESENTED"
     assert second["result_state_version"] == first["result_state_version"]
+    assert second["conversation"] is not None
     unheld = player.present("E03")
     assert (unheld.status_code, error_code(unheld)) == (422, "EVIDENCE_NOT_OWNED")
 
 
-def test_chat_returns_fixed_statement_without_changing_state(client):
+def test_chat_records_a_fixed_round_without_changing_state(client):
     player = Player(client)
     player.start()
     player.talk()
@@ -85,10 +88,13 @@ def test_chat_returns_fixed_statement_without_changing_state(client):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["business_status"] == "NOOP"
-    assert body["data"]["fixed_reply"] == "停电时我一直在休息区，没有去过档案室。"
+    assert body["business_status"] == "COMMITTED"
+    assert body["state_changed"] is False
+    conversation = body["conversation"]
+    assert body["data"] == {"conversation_id": conversation["conversation_id"]}
+    assert conversation["fixed_reply"] == "停电时我一直在休息区，没有去过档案室。"
     other = player.write("POST", player.path("/npcs/NPC02/conversations"), {"message": "你好"})
-    assert (other.status_code, error_code(other)) == (409, "NPC_UNAVAILABLE")
+    assert (other.status_code, error_code(other)) == (409, "ACTIVE_NPC_MISMATCH")
 
 
 def test_other_visitors_and_anonymous_requests_cannot_reach_a_save(client):
@@ -235,7 +241,9 @@ def test_accusation_is_final_and_reviews_wait_for_closure(client):
     assert (again.status_code, error_code(again)) == (409, "ACCUSATION_ALREADY_SUBMITTED")
     assert client.get(player.path("/accusation")).json()["data"] == first.json()["data"]
     review = client.get(player.path("/review")).json()["data"]
-    assert {e["evidence_id"] for e in review["missed_evidence"]} == {"E01", "E02", "E03"}
+    assert {e["evidence_id"] for e in review["missed_evidence"]} == {
+        f"E{i:02d}" for i in range(1, 13)
+    }
     assert player.load()["evidence"] == []
 
 

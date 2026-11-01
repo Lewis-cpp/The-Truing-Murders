@@ -56,13 +56,19 @@ class StepEvidenceLink(Request):
 
 
 class AccusationContent(Request):
-    suspect_character_id: LocalId
-    weapon_option_id: LocalId
-    motive_option_id: LocalId
-    ordered_process_step_ids: Annotated[list[LocalId], Field(min_length=1, max_length=50)]
+    """The draft and the formal submission share this shape; null rules differ per endpoint."""
+
+    suspect_character_id: LocalId | None
+    weapon_option_id: LocalId | None
+    motive_option_id: LocalId | None
+    ordered_process_step_ids: Annotated[list[LocalId], Field(max_length=50)]
     cited_evidence_ids: Annotated[list[LocalId], Field(max_length=50)]
     step_evidence_links: Annotated[list[StepEvidenceLink], Field(max_length=100)]
-    explanation: Annotated[str, Field(max_length=4000)] = ""
+    explanation: Annotated[str, Field(max_length=4000)]
+
+
+class SaveDraftRequest(Request):
+    content: AccusationContent
 
 
 class SubmitAccusationRequest(Request):

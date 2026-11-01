@@ -50,6 +50,10 @@ class CaseTemplate(Base):
         CheckConstraint(
             "jsonb_typeof(public_knowledge_json) = 'array'", name="public_knowledge_json"
         ),
+        CheckConstraint(
+            "deep_unlock_json IS NULL OR jsonb_typeof(deep_unlock_json) = 'object'",
+            name="deep_unlock_json",
+        ),
         Index("ix_case_template_status_published_at", "status", "published_at"),
     )
 
@@ -70,6 +74,11 @@ class CaseTemplate(Base):
     scoring_policy_json: Mapped[dict] = mapped_column(JSONB)
     rules_json: Mapped[dict] = mapped_column(JSONB)
     public_knowledge_json: Mapped[list] = mapped_column(JSONB)
+    # Full-case fields; slice rows (schema 2) keep NULL here and stay stored but unsupported.
+    introduction: Mapped[str | None] = mapped_column(Text)
+    timeline_origin_label: Mapped[str | None] = mapped_column(Text)
+    show_key_badges: Mapped[bool | None] = mapped_column(Boolean)
+    deep_unlock_json: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -86,6 +95,10 @@ class Character(Base):
         ),
         CheckConstraint("initial_pressure BETWEEN 0 AND 100", name="initial_pressure"),
         CheckConstraint("initial_trust BETWEEN 0 AND 100", name="initial_trust"),
+        CheckConstraint(
+            "core_lie_ids_json IS NULL OR jsonb_typeof(core_lie_ids_json) = 'array'",
+            name="core_lie_ids_json",
+        ),
     )
 
     template_id: Mapped[uuid.UUID] = mapped_column(
@@ -99,6 +112,13 @@ class Character(Base):
     is_interrogatable: Mapped[bool] = mapped_column(Boolean)
     initial_pressure: Mapped[int | None] = mapped_column(SmallInteger)
     initial_trust: Mapped[int | None] = mapped_column(SmallInteger)
+    # Full-case fields; slice rows keep NULL. role_label is the in-game job title; the
+    # enum column above only says how the character participates (SUSPECT/VICTIM/WITNESS).
+    role_label: Mapped[str | None] = mapped_column(Text)
+    personality: Mapped[str | None] = mapped_column(Text)
+    speech_style: Mapped[str | None] = mapped_column(Text)
+    default_reply: Mapped[str | None] = mapped_column(Text)
+    core_lie_ids_json: Mapped[list | None] = mapped_column(JSONB)
 
 
 class CharacterSecret(Base):
@@ -134,7 +154,12 @@ class CharacterSecret(Base):
 
 class Scene(Base):
     __tablename__ = "scene"
-    __table_args__ = (CheckConstraint("jsonb_typeof(actions_json) = 'array'", name="actions_json"),)
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(actions_json) = 'array'", name="actions_json"),
+        CheckConstraint(
+            "unlock_json IS NULL OR jsonb_typeof(unlock_json) = 'object'", name="unlock_json"
+        ),
+    )
 
     template_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), template_fk(), primary_key=True
@@ -144,6 +169,7 @@ class Scene(Base):
     description: Mapped[str] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer)
     actions_json: Mapped[list] = mapped_column(JSONB)
+    unlock_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class Evidence(Base):
@@ -165,6 +191,9 @@ class Evidence(Base):
             name="source",
         ),
         CheckConstraint(f"initial_credibility IN ({CREDIBILITY})", name="initial_credibility"),
+        CheckConstraint(
+            "kind IS NULL OR kind IN ('PHYSICAL', 'DOCUMENT', 'TESTIMONY', 'DIGITAL')", name="kind"
+        ),
     )
 
     template_id: Mapped[uuid.UUID] = mapped_column(
@@ -179,6 +208,8 @@ class Evidence(Base):
     source_character_id: Mapped[str | None] = mapped_column(String(64))
     initial_credibility: Mapped[str] = mapped_column(String(16))
     sort_order: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str | None] = mapped_column(String(16))
+    is_key: Mapped[bool | None] = mapped_column(Boolean)
 
 
 class EvidenceDependency(Base):
@@ -234,3 +265,111 @@ class LieRule(Base):
     counterevidence_json: Mapped[dict] = mapped_column(JSONB)
     admission_condition_json: Mapped[dict] = mapped_column(JSONB)
     on_admitted_json: Mapped[dict] = mapped_column(JSONB)
+
+
+class LieChain(Base):
+    """Groups one NPC's lie layers; lie_ids_json keeps the layer order."""
+
+    __tablename__ = "lie_chain"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["template_id", "character_id"],
+            ["character.template_id", "character.character_id"],
+            **RESTRICT,
+        ),
+        CheckConstraint("jsonb_typeof(lie_ids_json) = 'array'", name="lie_ids_json"),
+    )
+
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), template_fk(), primary_key=True
+    )
+    chain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    character_id: Mapped[str] = mapped_column(String(64))
+    lie_ids_json: Mapped[list] = mapped_column(JSONB)
+    sort_order: Mapped[int] = mapped_column(Integer)
+
+
+class Relationship(Base):
+    __tablename__ = "relationship"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["template_id", "from_character_id"],
+            ["character.template_id", "character.character_id"],
+            **RESTRICT,
+        ),
+        ForeignKeyConstraint(
+            ["template_id", "to_character_id"],
+            ["character.template_id", "character.character_id"],
+            **RESTRICT,
+        ),
+        CheckConstraint("assertion_kind IN ('FACT', 'TESTIMONY')", name="assertion_kind"),
+        CheckConstraint(f"credibility IN ({CREDIBILITY})", name="credibility"),
+        CheckConstraint("source_kind IN ('PUBLIC', 'EVIDENCE', 'NPC')", name="source_kind"),
+        CheckConstraint(
+            "jsonb_typeof(reveal_evidence_ids_json) = 'array'", name="reveal_evidence_ids_json"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(reveal_knowledge_ids_json) = 'array'", name="reveal_knowledge_ids_json"
+        ),
+    )
+
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), template_fk(), primary_key=True
+    )
+    relationship_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    from_character_id: Mapped[str] = mapped_column(String(64))
+    to_character_id: Mapped[str] = mapped_column(String(64))
+    relationship_type: Mapped[str] = mapped_column(String(100))
+    directed: Mapped[bool] = mapped_column(Boolean)
+    description: Mapped[str] = mapped_column(Text)
+    assertion_kind: Mapped[str] = mapped_column(String(16))
+    credibility: Mapped[str] = mapped_column(String(16))
+    source_kind: Mapped[str] = mapped_column(String(16))
+    source_id: Mapped[str | None] = mapped_column(String(64))
+    reveal_evidence_ids_json: Mapped[list] = mapped_column(JSONB)
+    reveal_knowledge_ids_json: Mapped[list] = mapped_column(JSONB)
+    sort_order: Mapped[int] = mapped_column(Integer)
+
+
+class TimelineEvent(Base):
+    __tablename__ = "timeline_event"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["template_id", "scene_id"], ["scene.template_id", "scene.scene_id"], **RESTRICT
+        ),
+        CheckConstraint("assertion_kind IN ('FACT', 'TESTIMONY')", name="assertion_kind"),
+        CheckConstraint(f"credibility IN ({CREDIBILITY})", name="credibility"),
+        CheckConstraint("source_kind IN ('PUBLIC', 'EVIDENCE', 'NPC')", name="source_kind"),
+        CheckConstraint("precision IN ('EXACT', 'RANGE', 'UNKNOWN')", name="precision"),
+        CheckConstraint(
+            "jsonb_typeof(participant_ids_json) = 'array'", name="participant_ids_json"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(reveal_evidence_ids_json) = 'array'", name="reveal_evidence_ids_json"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(reveal_knowledge_ids_json) = 'array'", name="reveal_knowledge_ids_json"
+        ),
+        CheckConstraint("jsonb_typeof(conflicts_with_json) = 'array'", name="conflicts_with_json"),
+    )
+
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), template_fk(), primary_key=True
+    )
+    timeline_event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    scene_id: Mapped[str | None] = mapped_column(String(64))
+    participant_ids_json: Mapped[list] = mapped_column(JSONB)
+    precision: Mapped[str] = mapped_column(String(8))
+    start_minutes: Mapped[int | None] = mapped_column(Integer)
+    end_minutes: Mapped[int | None] = mapped_column(Integer)
+    time_label: Mapped[str] = mapped_column(Text)
+    assertion_kind: Mapped[str] = mapped_column(String(16))
+    credibility: Mapped[str] = mapped_column(String(16))
+    source_kind: Mapped[str] = mapped_column(String(16))
+    source_id: Mapped[str | None] = mapped_column(String(64))
+    reveal_evidence_ids_json: Mapped[list] = mapped_column(JSONB)
+    reveal_knowledge_ids_json: Mapped[list] = mapped_column(JSONB)
+    conflicts_with_json: Mapped[list] = mapped_column(JSONB)
+    sort_order: Mapped[int] = mapped_column(Integer)

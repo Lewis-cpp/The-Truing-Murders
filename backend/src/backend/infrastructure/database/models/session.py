@@ -31,7 +31,7 @@ PHASES = (
 EVENT_TYPES = (
     "'SESSION_CREATED', 'INVESTIGATE', 'SET_INTERROGATION', 'END_INTERROGATION',"
     " 'PRESENT_EVIDENCE', 'OPEN_ACCUSATION', 'CANCEL_ACCUSATION', 'SUBMIT_ACCUSATION',"
-    " 'FINISH_REVIEW', 'ASK_TOPIC', 'POINT_CONTRADICTION'"
+    " 'FINISH_REVIEW', 'ASK_TOPIC', 'POINT_CONTRADICTION', 'SAVE_ACCUSATION_DRAFT'"
 )
 
 
@@ -347,3 +347,89 @@ class Accusation(Base):
     criteria_results_json: Mapped[list] = mapped_column(JSONB)
     fixed_review: Mapped[str] = mapped_column(Text)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Conversation(Base):
+    """One interaction round of an NPC; the model output never enters these tables directly."""
+
+    __tablename__ = "conversation"
+    __table_args__ = (
+        UniqueConstraint("session_id", "conversation_seq"),
+        UniqueConstraint("session_id", "action_id"),
+        # Messages scope their round by (session_id, conversation_id).
+        UniqueConstraint("session_id", "conversation_id"),
+        session_fk(),
+        ForeignKeyConstraint(
+            ["session_id", "action_id"],
+            ["action_request.session_id", "action_request.action_id"],
+            **RESTRICT,
+        ),
+        ForeignKeyConstraint(
+            ["template_id", "character_id"],
+            ["character.template_id", "character.character_id"],
+            **RESTRICT,
+        ),
+        CheckConstraint("role IN ('NPC', 'HOST', 'REVIEW')", name="role"),
+        CheckConstraint("(role = 'NPC') = (character_id IS NOT NULL)", name="character_id"),
+        CheckConstraint("conversation_seq > 0", name="conversation_seq"),
+        CheckConstraint(
+            "generation_status IN ('PREPARING', 'GENERATING', 'COMPLETED', 'FALLBACK', 'STALE')",
+            name="generation_status",
+        ),
+        CheckConstraint("jsonb_typeof(response_plan_json) = 'object'", name="response_plan_json"),
+        CheckConstraint(
+            "generation_deadline_at IS NOT NULL"
+            " OR generation_status NOT IN ('PREPARING', 'GENERATING')",
+            name="deadline",
+        ),
+        Index(
+            "ix_conversation_character_seq",
+            "session_id",
+            "character_id",
+            "conversation_seq",
+        ),
+    )
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    action_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    conversation_seq: Mapped[int] = mapped_column(BigInteger)
+    role: Mapped[str] = mapped_column(String(8), server_default=text("'NPC'"))
+    character_id: Mapped[str | None] = mapped_column(String(64))
+    purpose_key: Mapped[str | None] = mapped_column(String(96))
+    source_state_version: Mapped[int] = mapped_column(BigInteger)
+    response_plan_json: Mapped[dict] = mapped_column(JSONB)
+    fixed_reply: Mapped[str] = mapped_column(Text)
+    generation_status: Mapped[str] = mapped_column(String(16))
+    generation_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fallback_reason: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_message"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "sequence_no"),
+        ForeignKeyConstraint(
+            ["session_id", "conversation_id"],
+            ["conversation.session_id", "conversation.conversation_id"],
+            **RESTRICT,
+        ),
+        CheckConstraint("sequence_no IN (1, 2)", name="sequence_no"),
+        CheckConstraint("speaker IN ('PLAYER', 'NPC', 'HOST', 'REVIEW')", name="speaker"),
+        CheckConstraint("origin IN ('PLAYER', 'LLM', 'FIXED')", name="origin"),
+        CheckConstraint("validity IN ('VALID', 'STALE')", name="validity"),
+    )
+
+    message_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    sequence_no: Mapped[int] = mapped_column(SmallInteger)
+    speaker: Mapped[str] = mapped_column(String(8))
+    content: Mapped[str] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String(8))
+    validity: Mapped[str] = mapped_column(String(8), server_default=text("'VALID'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -31,6 +31,10 @@ def interrogating(client) -> Player:
     return player
 
 
+def npc_state(session, character_id="NPC01"):
+    return session.scalar(select(NpcState).where(NpcState.character_id == character_id))
+
+
 def test_topic_records_testimony_once(client):
     player = interrogating(client)
     asked = player.ask_topic("Q01")
@@ -50,7 +54,7 @@ def test_topic_records_testimony_once(client):
     unknown = player.ask_topic("Q99")
     assert (unknown.status_code, error_code(unknown)) == (422, "INVALID_ACTION_REFERENCE")
     known = player.load()["known_information"]
-    assert [k["information_ref"]["id"] for k in known] == ["K01", "K03"]
+    assert {k["information_ref"]["id"] for k in known} == {"K01", "K11", "K03"}
 
 
 def test_contradiction_needs_recorded_testimony_and_moves_no_lie(client, db):
@@ -71,7 +75,7 @@ def test_contradiction_needs_recorded_testimony_and_moves_no_lie(client, db):
     assert outcome(repeat)["reason_code"] == "CONTRADICTION_ALREADY_POINTED"
     with db() as session:
         types = session.scalars(select(GameEventLog.event_type).order_by(GameEventLog.event_seq))
-        state = session.scalar(select(NpcState))
+        state = npc_state(session)
         assert list(types)[-2:] == ["ASK_TOPIC", "POINT_CONTRADICTION"]
     assert (state.pressure, state.trust, state.lies_json["L01"]["stage"]) == (35, 40, "UNBROKEN")
 
@@ -90,21 +94,26 @@ def test_irrelevant_moves_lead_to_evasion_until_the_player_leaves(client, db):
     assert outcome(evading)["npc"]["is_evading"] is True
     assert outcome(evading)["npc"]["display_state"] == "EVADING"
     assert outcome(evading)["npc"]["fixed_statement"] == evade_reply
+    # Presentations and chats record a round even while the NPC evades; questions do not.
+    shown = player.present("E01")
+    assert shown.json()["business_status"] == "COMMITTED"
+    assert shown.json()["conversation"]["fixed_reply"] == evade_reply
     for blocked in (
-        player.present("E01"),
         player.ask_topic("Q01"),
         player.contradict("K03", "E03"),
-        player.write("POST", player.path("/npcs/NPC01/conversations"), {"message": "说话"}),
     ):
         assert blocked.json()["business_status"] == "NOOP"
         assert blocked.json()["data"]["fixed_reply"] == evade_reply
+    chat = player.write("POST", player.path("/npcs/NPC01/conversations"), {"message": "说话"})
+    assert chat.json()["business_status"] == "COMMITTED"
+    assert chat.json()["conversation"]["fixed_reply"] == evade_reply
     with db() as session:
-        assert session.scalar(select(NpcState.irrelevant_streak)) == 2
+        assert npc_state(session).irrelevant_streak == 2
     assert player.leave().status_code == 200
     with db() as session:
-        assert session.scalar(select(NpcState.irrelevant_streak)) == 0
+        assert npc_state(session).irrelevant_streak == 0
     assert player.talk().status_code == 201
-    [npc] = player.load()["npcs"]
+    npc = next(n for n in player.load()["npcs"] if n["npc_id"] == "NPC01")
     assert (npc["is_evading"], npc["display_state"]) == (False, "CALM")
     assert outcome(player.present("E01"))["reason_code"] == "LIE_BROKEN"
 
