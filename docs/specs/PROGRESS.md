@@ -5,34 +5,30 @@
 
 ## 当前状态
 
-- 当前阶段：v0.4（T15～T17 已完成；T18 前端与交付未开始）
-- 当前分支：feat/v0.4-npc01-generation（自标签 v0.3 切出）
-- 最近一次完整检查：2026-11-02（T17 提交后）：后端 `pytest -q` 491 项通过 0 失败
-  （1 项 live_llm 按默认配置跳过）；ruff format/check 通过；`alembic check` 无差异
-  （0004 可升级、可降级）。前端与基线相同：`format:check`、`typecheck`、`lint`、`build`
-  通过，`npm test` 25 过 3 败（generation.test.ts，属 T18）。
-- 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`；本地，待推送）
+- 当前阶段：v0.4 已完成（本地收尾，待推送）；下一阶段 v0.5。
+- 当前分支：feat/v0.4-npc01-generation
+- 最近一次完整检查：收尾复跑（2026-11-02，干净工作区）：后端 `ruff format --check`（72 文件）、
+  `ruff check`、`pytest -q` 491 项通过 0 失败（1 项 live_llm 按默认配置排除）、`alembic check`
+  无差异；前端 `format:check`、`typecheck`、`lint`、`npm test` 28/28、`build` 全部通过。
+- 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`）、v0.4（本地，待推送）
 
 ## 阶段清单
 
 | 阶段 | 验收测试已启用 | 实现 | 全部检查通过 | 交付记录 | 标签 |
 | --- | --- | --- | --- | --- | --- |
 | v0.3 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
-| v0.4 | 是 | 否 | 否 | 否 | 否 |
+| v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.5 | 否 | 否 | 否 | 否 | 否 |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. T18 前端与交付：网页在轮次 PREPARING/GENERATING 时显示"回复准备中"并每 1.5 秒轮询
-   `GET /sessions/{id}/conversations/{conversation_id}`，终态停止、离开审讯面板停止；
-   `can_retry_reply` 为真显示 `data-testid="retry-reply"` 按钮（调 reply-retries 后继续轮询）；
-   `FALLBACK` 且原因非 GENERATION_DISABLED 时显示 `data-testid="fallback-notice"`（固定模式不显示）；
-   让 frontend/tests/generation.test.ts 转绿（当前 3 败）。
-2. 真实样本评测（规格第 8 节）：无模型凭据，交付记录如实写"未执行"，不算门槛失败。
-3. 交付：docs/20-v0.4-delivery.md（范围、配置方法、假传输故障清单、真实样本"未执行"、已知限制）、
-   README"启用模型"小节（环境变量、硬预算、如何关闭）；干净工作区重跑全部检查；打 v0.4 标签。
+1. v0.5 阶段开始（等启动者指示后进行）：从标签 `v0.4` 切分支 `feat/v0.5-<主题>`；在仓库根目录
+   执行 `cp -r docs/specs/v0.5/tests/. .` 启用验收测试并立即单独提交 "Add v0.5 acceptance tests"；
+   跑完整检查记录基线；读 docs/specs/v0.5/spec.md 按任务编号拆 2～4 小时任务写回本节。
+2. 推送与人工事项见下节：v0.3/v0.4 的本地提交与标签待推送；真实模型评测（v0.4 第 8 节）
+   需凭据后补做。
 
 ## 阻塞与需要人处理的事项
 
@@ -45,6 +41,11 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.4 · e83f0a8..HEAD（T18：前端轮询与交付收尾）。页面每 1.5 秒轮询待定轮次、
+  终态/离开审讯/卸载停止，fallback-notice 与 retry-reply 按钮（新幂等键，至多两次）。
+  交付记录 docs/20-v0.4-delivery.md（真实样本评测无凭据，如实写"未执行"）；README"启用模型"
+  小节、接口概览补 reply-retries。干净工作区复跑：后端 491 过 0 败、ruff/alembic check 通过；
+  前端 28/28、format/typecheck/lint/build 通过。标签 v0.4 本地已打，待推送。下一步 v0.5。
 - 2026-11-02 · v0.4 · d0e3d41..e83f0a8（T17：生成编排与持久化）。迁移 0004（llm_attempt、
   conversation.active_attempt_id + 部分唯一索引、llm_budget_json 回填、message.attempt_id）；
   application/generation.py 任务管线（预留/派发/结算、STALE 复核、额度 KNOWN/UNKNOWN/NOT_SENT）；
