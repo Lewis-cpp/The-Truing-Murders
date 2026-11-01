@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { ElAlert, ElButton, ElPopconfirm, ElSkeleton, ElTag } from 'element-plus'
 import { useGameStore } from '../stores/game'
 import StartPanel from '../components/game/StartPanel.vue'
@@ -33,6 +33,8 @@ const caseInfo = computed(
 )
 
 onMounted(game.init)
+// Leaving the page stops the polling; a reload rebuilds it from the pending rounds.
+onUnmounted(() => game.stopPolling())
 </script>
 
 <template>

@@ -25,6 +25,30 @@ const states: Record<string, string> = {
   CONFESSION: '已完整承认',
   PARTIAL_CONFESSION: '部分承认',
 }
+const PENDING_ROUNDS = ['PREPARING', 'GENERATING']
+// Why a round fell back to the fixed reply; shown next to it, never as an error of the player.
+const FALLBACK_REASONS: Record<string, string> = {
+  MODEL_TIMEOUT: '模型超时',
+  MODEL_RATE_LIMITED: '模型限流',
+  MODEL_UNAVAILABLE: '模型暂不可用',
+  MODEL_OUTPUT_REJECTED: '生成内容未通过检查',
+  CONTEXT_BUDGET_EXCEEDED: '超出本轮上下文预算',
+  GENERATION_INTERRUPTED: '生成被中断',
+  GENERATION_BUDGET_EXHAUSTED: '本局生成额度已用完',
+}
+
+function isPending(round: { generation_status: string }): boolean {
+  return PENDING_ROUNDS.includes(round.generation_status)
+}
+
+// The newest fallback of this person; older ones stay in the transcript as history.
+const fallbackRound = computed(() => {
+  const rounds = game.conversations.filter(
+    (round) =>
+      round.generation_status === 'FALLBACK' && round.fallback_reason !== 'GENERATION_DISABLED',
+  )
+  return rounds.at(-1) ?? null
+})
 
 async function ask() {
   if (!active.value || !question.value.trim()) return
@@ -71,8 +95,27 @@ function contradict() {
             <template v-if="message.speaker === 'PLAYER'">你：{{ message.content }}</template>
             <template v-else>{{ active.name }}：{{ message.content }}</template>
           </p>
+          <p v-if="isPending(round)" class="pending">回复准备中</p>
         </article>
       </div>
+      <template v-if="fallbackRound">
+        <ElAlert
+          data-testid="fallback-notice"
+          type="warning"
+          :title="`已使用固定回复（${FALLBACK_REASONS[fallbackRound.fallback_reason ?? ''] ?? '生成未成功'}）`"
+          :closable="false"
+          show-icon
+        />
+        <ElButton
+          v-if="fallbackRound.can_retry_reply"
+          data-testid="retry-reply"
+          size="small"
+          :disabled="game.busy"
+          @click="game.retryReply(fallbackRound.conversation_id)"
+        >
+          重试生成
+        </ElButton>
+      </template>
       <ElAlert
         v-if="active.is_evading"
         type="warning"
@@ -183,6 +226,10 @@ function contradict() {
 }
 .player {
   color: var(--el-text-color-secondary);
+}
+.pending {
+  color: var(--el-text-color-secondary);
+  font-style: italic;
 }
 .statement {
   margin: 0;

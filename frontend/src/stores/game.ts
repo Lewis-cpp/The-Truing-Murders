@@ -11,6 +11,7 @@ import {
 } from '../api/client'
 import type {
   AccusationContent,
+  ActionResult,
   CaseSummary,
   ConversationPage,
   ConversationView,
@@ -41,6 +42,9 @@ const OUTDATED = [
   'CURRENT_SESSION_CONFLICT',
   'CURRENT_SESSION_EXISTS',
 ]
+// Rounds waiting for the model; the page polls each one until it settles.
+const PENDING_ROUNDS = ['PREPARING', 'GENERATING']
+const POLL_INTERVAL_MS = 1500
 
 /** Server state only. The page is always rebuilt from a fresh GET after a confirmed write. */
 export const useGameStore = defineStore('game', () => {
@@ -56,6 +60,9 @@ export const useGameStore = defineStore('game', () => {
   const stale = ref(false)
   const pending = ref<PendingWrite | null>(null)
   const conversations = ref<ConversationView[]>([])
+  // The round the page is polling for, if any; the timer itself stays non-reactive.
+  const pollingId = ref<string | null>(null)
+  let pollTimer: ReturnType<typeof setInterval> | null = null
 
   function base(): string {
     return `/api/v1/sessions/${view.value?.session.session_id}`
@@ -63,6 +70,44 @@ export const useGameStore = defineStore('game', () => {
 
   function version(): number | undefined {
     return view.value?.session.state_version
+  }
+
+  function stopPolling() {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+    pollingId.value = null
+  }
+
+  async function pollOnce() {
+    const conversationId = pollingId.value
+    if (!conversationId || !view.value) {
+      stopPolling()
+      return
+    }
+    try {
+      const body = await get<{ data: ConversationView }>(
+        `${base()}/conversations/${conversationId}`,
+      )
+      const round = body.data
+      const index = conversations.value.findIndex((item) => item.conversation_id === conversationId)
+      if (index >= 0) conversations.value.splice(index, 1, round)
+      else conversations.value.push(round)
+      // A final state ends the polling; the server writes it, the page only reads it.
+      if (!PENDING_ROUNDS.includes(round.generation_status)) stopPolling()
+    } catch {
+      // A failed poll keeps the placeholder; the next tick tries again.
+    }
+  }
+
+  function startPolling(conversationId: string) {
+    if (pollTimer !== null && pollingId.value === conversationId) return
+    stopPolling()
+    pollingId.value = conversationId
+    pollTimer = setInterval(() => {
+      void pollOnce()
+    }, POLL_INTERVAL_MS)
   }
 
   async function loadConversations() {
@@ -78,6 +123,10 @@ export const useGameStore = defineStore('game', () => {
     conversations.value = [...page.data.items].sort(
       (left, right) => left.conversation_seq - right.conversation_seq,
     )
+    const waiting = conversations.value.find((round) =>
+      PENDING_ROUNDS.includes(round.generation_status),
+    )
+    if (waiting) startPolling(waiting.conversation_id)
   }
 
   async function refresh() {
@@ -90,14 +139,19 @@ export const useGameStore = defineStore('game', () => {
       if (!(caught instanceof ApiError) || caught.code !== 'SAVE_VERSION_UNSUPPORTED') throw caught
       view.value = null
       conversations.value = []
+      stopPolling()
       unsupported.value = caught.details as unknown as UnsupportedSave
       review.value = null
       return
     }
     review.value = null
     const phase = view.value?.session.phase
-    // Leaving an interrogation by any route (back, accusation, restart) ends its transcript.
-    if (phase !== 'INTERROGATION') conversations.value = []
+    // Leaving an interrogation by any route (back, accusation, restart) ends its transcript
+    // and stops the polling with it.
+    if (phase !== 'INTERROGATION') {
+      conversations.value = []
+      stopPolling()
+    }
     if (phase === 'REVIEW' || phase === 'FINISHED') {
       review.value = (await get<{ data: ReviewView }>(`${base()}/review`)).data
     }
@@ -125,7 +179,10 @@ export const useGameStore = defineStore('game', () => {
     return '网络异常，请稍后重试。'
   }
 
-  async function run(write: PendingWrite, onSuccess?: (data: DataWithSummary) => void) {
+  async function run(
+    write: PendingWrite,
+    onSuccess?: (data: DataWithSummary, result: ActionResult<DataWithSummary>) => void,
+  ) {
     busy.value = true
     error.value = null
     notice.value = null
@@ -134,7 +191,7 @@ export const useGameStore = defineStore('game', () => {
     try {
       const result = await send<DataWithSummary>(write)
       pending.value = null
-      onSuccess?.(result.data)
+      onSuccess?.(result.data, result)
       try {
         await refresh()
       } catch {
@@ -188,6 +245,8 @@ export const useGameStore = defineStore('game', () => {
     stale,
     pending,
     conversations,
+    pollingId,
+    stopPolling,
     emptyDraft,
     init,
     retry: () => pending.value && run(pending.value, summarize),
@@ -231,6 +290,17 @@ export const useGameStore = defineStore('game', () => {
       run(
         newWrite('POST', `${base()}/npcs/${npcId}/conversations`, { message }, version()),
         summarize,
+      ),
+    retryReply: (conversationId: string) =>
+      run(
+        newWrite('POST', `${base()}/conversations/${conversationId}/reply-retries`, {}, version()),
+        // The accepted retry answers with the round back in PREPARING; poll it again.
+        (_data, result) => {
+          const round = result.conversation
+          if (round && PENDING_ROUNDS.includes(round.generation_status)) {
+            startPolling(round.conversation_id)
+          }
+        },
       ),
     askTopic: (npcId: string, topicId: string) =>
       run(
