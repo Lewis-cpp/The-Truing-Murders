@@ -1,4 +1,4 @@
-"""Offline publisher: python -m backend.import_case assets/cases/case_001/v1/slice.json"""
+"""Offline publisher: python -m backend.import_case assets/cases/case_001/v1/case.json"""
 
 import argparse
 import sys

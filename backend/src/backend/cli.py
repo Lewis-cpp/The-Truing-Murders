@@ -1,4 +1,4 @@
-"""Interactive, offline W1 adapter. All outcomes come from Game and domain rules."""
+"""Interactive, offline full-case adapter. All outcomes come from Game and domain rules."""
 
 import argparse
 from collections.abc import Callable
@@ -9,15 +9,15 @@ from pydantic import ValidationError
 from backend.application.case import load_case
 from backend.application.game import Game
 from backend.domain.models import Accusation, GameError, Phase, StepEvidenceLink
-from backend.domain.state_machine import emotion, guard
+from backend.domain.state_machine import admission_progress, emotion, guard
 
 HELP = """命令（编号可在 look / bag / topics / accuse 中查看）：
-  look              查看场景、调查点与可审讯角色
-  inspect A01       调查指定位置；可以自主选择顺序
+  look              查看已开放场景、调查点与可审讯角色
+  inspect A01       调查指定位置；新场景随证据逐步开放
   bag               查看已获得证据和已记录的证词
-  talk NPC01        进入沈砚的审讯
+  talk NPC01        进入某位角色的审讯
   ask 你的问题      获取当前固定说法；文字不产生数值收益
-  topics            列出审讯中可以追问的话题
+  topics            列出当前角色可以追问的话题
   topic Q01         追问话题；回答记入证词，不经核验
   present E01       向当前角色明确出示已持有证据；无关材料会让他戒备
   contradict K03 E03  指出证词与证据的矛盾；指错同样算无关操作
@@ -27,7 +27,9 @@ HELP = """命令（编号可在 look / bag / topics / accuse 中查看）：
   review            结案后查看判定与真相
   finish            结束复盘；仍可重读结果
   status / help     查看阶段 / 帮助
-  quit              退出；本周无存档，进度丢失"""
+  quit              退出；本局无存档，进度丢失"""
+
+TOTAL_EVIDENCE = 12
 
 
 def _ids(value: str) -> tuple[str, ...]:
@@ -97,7 +99,7 @@ def run(
     game: Game, read: Callable[[str], str] = input, write: Callable[[str], None] = print
 ) -> None:
     view = game.view()
-    write(f"《{view['title']}》· W1 可玩切片（内容待人工审阅）")
+    write(f"《{view['title']}》· 全案固定模式（内容待人工审阅）")
     write("完全固定规则与台词，无 Agent、无模型调用、无需数据库。进度只在内存中，退出即丢失。")
     write(view["introduction"])
     write(HELP)
@@ -112,11 +114,19 @@ def run(
                 write(HELP)
             elif command == "look":
                 view = game.view()
-                write(f"{view['scene']['id']} {view['scene']['name']}：{view['scene']['text']}")
-                for action in view["actions"]:
-                    done = "已调查" if action["id"] in game.state.completed_actions else "待调查"
-                    write(f"{action['id']} · {action['label']}（{done}）")
-                write(f"可审讯：{view['npc']['id']} {view['npc']['name']} · {view['npc']['role']}")
+                for scene in view["scenes"]:
+                    write(f"{scene['id']} {scene['name']}：{scene['text']}")
+                    for action in scene["actions"]:
+                        done = (
+                            "已调查" if action["id"] in game.state.completed_actions else "待调查"
+                        )
+                        write(f"  {action['id']} · {action['label']}（{done}）")
+                write(
+                    "可审讯："
+                    + "；".join(
+                        f"{npc['id']} {npc['name']} · {npc['role']}" for npc in view["npcs"]
+                    )
+                )
             elif command == "inspect":
                 write(game.inspect(argument))
             elif command == "bag":
@@ -165,11 +175,18 @@ def run(
                 game.finish()
                 write("本局已结束；review 可重读判定。")
             elif command == "status":
-                write(f"阶段：{game.state.phase.value}；证据：{len(game.state.evidence_ids)}/3。")
+                write(
+                    f"阶段：{game.state.phase.value}；"
+                    f"证据：{len(game.state.evidence_ids)}/{TOTAL_EVIDENCE}。"
+                )
                 if game.state.phase == Phase.INTERROGATION:
-                    npc = game.state.npc
+                    npc_id = game.state.active_npc_id
+                    npc = game.state.npcs[npc_id]
                     mood = "回避中" if game.evading else emotion(npc)
-                    write(f"当前情绪：{mood}；说法阶段：{npc.lie_stage.value}。")
+                    write(
+                        f"当前情绪：{mood}；承认进度："
+                        f"{admission_progress(game.case, game.state, npc_id)}。"
+                    )
             elif command:
                 write("无法识别该命令。输入 help 查看操作。")
         except (EOFError, KeyboardInterrupt):
@@ -185,8 +202,8 @@ def run(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="《停电之夜》W1 离线命令行切片")
-    parser.add_argument("--case", type=Path, help="载入另一个符合 W1 契约的切片文件")
+    parser = argparse.ArgumentParser(description="《停电之夜》离线命令行（全案固定模式）")
+    parser.add_argument("--case", type=Path, help="载入另一个符合全案契约的案件文件")
     args = parser.parse_args()
     try:
         game = Game(load_case(args.case))

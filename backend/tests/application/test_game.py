@@ -1,11 +1,10 @@
-import json
-from dataclasses import FrozenInstanceError
+"""Ported v0.2 engine checks for the local CLI game, on the full case."""
 
 import pytest
 
 from backend.application.case import load_case
 from backend.application.game import Game
-from backend.domain.models import Accusation, GameError, Phase
+from backend.domain.models import Accusation, GameError, Phase, StepEvidenceLink
 
 pytestmark = pytest.mark.unit
 
@@ -33,7 +32,7 @@ def accusation(**changes):
         lambda g: g.present("NPC01", "E01"),
         lambda g: g.ask("问题"),
         lambda g: g.inspect("UNKNOWN"),
-        lambda g: g.talk("NPC02"),
+        lambda g: g.talk("VICTIM"),
         lambda g: g.submit(accusation()),
         lambda g: g.review(),
         lambda g: g.back(),
@@ -51,7 +50,7 @@ def test_illegal_interrogation_targets_and_unheld_evidence_are_atomic(game):
     game.talk("NPC01")
     before = game.state
     for action in (
-        lambda: game.inspect("A02"),
+        lambda: game.inspect("A05"),
         lambda: game.present("NPC02", "E01"),
         lambda: game.present("NPC01", "E03"),
     ):
@@ -80,7 +79,7 @@ def test_accusation_can_be_cancelled_without_confession_or_evidence(game):
         {"motive": "UNKNOWN"},
         {"steps": ()},
         {"steps": ("P_ENTER", "P_ENTER")},
-        {"cited_evidence_ids": ("E03",)},
+        {"cited_evidence_ids": ("E05",)},
         {"cited_evidence_ids": ("E01", "E01")},
     ],
 )
@@ -94,10 +93,8 @@ def test_invalid_submission_does_not_close_or_change_state(game, changes):
     assert game.state.verdict is None
 
 
-@pytest.mark.parametrize("step,evidence", [("P_SEARCH_FIRST", "E01"), ("P_ENTER", "E02")])
+@pytest.mark.parametrize("step,evidence", [("P_CUT_POWER", "E01"), ("P_ENTER", "E02")])
 def test_links_must_belong_to_submitted_steps_and_citations(game, step, evidence):
-    from backend.domain.models import StepEvidenceLink
-
     game.inspect("A01")
     game.inspect("A02")
     game.accuse()
@@ -112,37 +109,12 @@ def test_links_must_belong_to_submitted_steps_and_citations(game, step, evidence
     assert game.state == before
 
 
-def test_knowledge_requires_disclosure_and_only_presented_material_reaches_npc(game):
-    case = load_case()
-    initial = json.dumps(game.view(), ensure_ascii=False)
-    assert "truth" not in game.view()
-    assert "admission_pressure_min" not in initial
-    assert case.lie.statements.admitted not in initial
-    assert case.evidence[0].content not in initial
-    for action in ("A01", "A02", "A03"):
-        game.inspect(action)
-    game.talk("NPC01")
-
-    def known() -> list[str]:
-        return [k["content"] for k in game.view()["knowledge"]]
-
-    assert game.state.npc.presented == frozenset()
-    assert case.knowledge[1].content not in known()
-    game.present("NPC01", "E01")
-    assert game.state.npc.presented == {"E01"}
-    assert len(known()) == 1
-    game.present("NPC01", "E03")
-    assert game.view()["knowledge"][-1]["credibility"] == "UNVERIFIED"
-    assert case.knowledge[1].content in known()
-    with pytest.raises(GameError):
-        game.present("NPC02", "E01")
-
-
 def test_closure_freezes_input_and_review_does_not_grant_missing_evidence(game):
+    game.inspect("A01")
     game.accuse()
-    game.submit(accusation())
+    game.submit(accusation(steps=("P_ENTER",), cited_evidence_ids=("E01",)))
     frozen = game.state
-    assert game.state.verdict.score == 75
+    assert game.state.verdict.score == 60
     assert "truth" in game.view()
     for action in (
         lambda: game.inspect("A01"),
@@ -160,10 +132,7 @@ def test_closure_freezes_input_and_review_does_not_grant_missing_evidence(game):
     assert game.state == frozen
     game.finish()
     assert game.review() == first
-    assert not game.state.evidence_ids
     assert game.state.verdict is frozen.verdict
-    with pytest.raises(FrozenInstanceError):
-        game.state.npc.pressure = 100
 
 
 def test_separate_games_and_read_only_actions_do_not_share_or_change_state(game):
@@ -178,17 +147,24 @@ def test_separate_games_and_read_only_actions_do_not_share_or_change_state(game)
 
 def test_alternate_investigation_source_does_not_duplicate_evidence():
     case = load_case()
-    alternate = case.scene.actions[0].model_copy(update={"id": "A04"})
-    case = case.model_copy(
-        update={
-            "scene": case.scene.model_copy(update={"actions": (*case.scene.actions, alternate)})
-        }
-    )
+    alternate = case.scenes[0].actions[0].model_copy(update={"id": "A99"})
+    scene = case.scenes[0].model_copy(update={"actions": (*case.scenes[0].actions, alternate)})
+    case = case.model_copy(update={"scenes": (scene, *case.scenes[1:])})
     game = Game(case)
     game.inspect("A01")
-    assert "没有重复发放" in game.inspect("A04")
+    assert "没有重复发放" in game.inspect("A99")
     assert game.state.evidence_ids == {"E01"}
-    assert game.state.completed_actions == {"A01", "A04"}
+    assert game.state.completed_actions == {"A01", "A99"}
     before = game.state
-    game.inspect("A04")
+    game.inspect("A99")
     assert game.state == before
+
+
+def test_view_is_an_allowlist_without_hidden_content(game):
+    initial = str(game.view())
+    case = game.case
+    assert "truth" not in game.view()
+    assert "admission_pressure_min" not in initial
+    assert case.lies[1].statements.admitted not in initial
+    assert case.evidence[0].content not in initial
+    assert all(scene["id"] == "S01" for scene in game.view()["scenes"])

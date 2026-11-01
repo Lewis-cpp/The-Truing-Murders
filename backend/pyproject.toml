@@ -31,7 +31,7 @@ dev = [
 packages = ["src/backend"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"assets/cases/case_001/v1/slice.json" = "backend/case_data/case_001/v1/slice.json"
+"assets/cases/case_001/v1/case.json" = "backend/case_data/case_001/v1/case.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

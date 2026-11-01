@@ -1,20 +1,26 @@
 import hashlib
 import json
-from itertools import permutations
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from backend.domain.models import Case, GameState, LieStage, NPCState, Phase
-from backend.domain.rules import present, relevant_evidence
+from backend.domain.evidence import knowledge_speaker
+from backend.domain.models import (
+    Case,
+    GameState,
+    LieStage,
+    NPCState,
+    Phase,
+)
+from backend.domain.rules import chains_of, lie_by_id, present
 
 
 def default_case_path() -> Path:
     # Editable checkout and packaged wheel both carry the same versioned resource.
-    package = Path(__file__).resolve().parents[1] / "case_data/case_001/v1/slice.json"
+    package = Path(__file__).resolve().parents[1] / "case_data/case_001/v1/case.json"
     if package.is_file():
         return package
-    return Path(__file__).resolve().parents[3] / "assets/cases/case_001/v1/slice.json"
+    return Path(__file__).resolve().parents[3] / "assets/cases/case_001/v1/case.json"
 
 
 def _unique(values, label: str) -> set[str]:
@@ -24,72 +30,275 @@ def _unique(values, label: str) -> set[str]:
     return set(items)
 
 
+def _require_dependency(dep, evidence_ids: set[str], label: str) -> None:
+    if not (set(dep.all_of) | set(dep.any_of)) <= evidence_ids:
+        raise ValueError(f"{label}引用了不存在的证据。")
+
+
 def validate_case(case: Case) -> None:
+    """Every publication rule of schema 3 (spec 2.2); a failure rejects the whole file."""
+    characters = {c.id: c for c in case.characters}
+    character_ids = _unique((c.id for c in case.characters), "人物")
+    scene_ids = _unique((s.id for s in case.scenes), "场景")
+    action_ids = _unique((a.id for s in case.scenes for a in s.actions), "调查动作")
     evidence_ids = _unique((e.id for e in case.evidence), "证据")
-    _unique((a.id for a in case.scene.actions), "调查动作")
+    knowledge_map = {k.id: k for k in case.knowledge}
+    knowledge_ids = _unique((k.id for k in case.knowledge), "知识")
+    lie_map = {lie.id: lie for lie in case.lies}
+    lie_ids = _unique((lie.id for lie in case.lies), "谎言层")
+    _unique((chain.id for chain in case.lie_chains), "谎言链")
+    _unique((t.id for t in case.interrogation.topics), "话题")
+    _unique((c.id for c in case.interrogation.contradictions), "矛盾")
+    _unique((r.id for r in case.relationships), "关系")
+    timeline_map = {t.id: t for t in case.timeline}
+    _unique((t.id for t in case.timeline), "时间线")
+    _unique((c.id for c in case.scoring.criteria), "评分项")
     suspects = _unique((c.id for c in case.suspects), "嫌疑人")
     weapons = _unique((c.id for c in case.weapons), "凶器")
     motives = _unique((c.id for c in case.motives), "动机")
     steps = _unique((c.id for c in case.process_steps), "步骤")
-    knowledge_ids = _unique((k.id for k in case.knowledge), "知识")
-    _unique((c.id for c in case.scoring.criteria), "评分项")
-    _unique((e.evidence_id for e in case.lie.effects), "出示效果")
-    if len(evidence_ids) != 3:
-        raise ValueError("W1 切片必须恰好包含 3 条证据。")
-    if case.npc.id not in suspects or case.lie.npc_id != case.npc.id:
-        raise ValueError("NPC 或谎言的角色引用不存在。")
-    if (
-        case.truth.culprit not in suspects
-        or case.truth.weapon not in weapons
-        or case.truth.motive not in motives
-        or not case.truth.steps
-        or not set(case.truth.steps) <= steps
-    ):
-        raise ValueError("真相必须引用合法的候选项和非空步骤。")
-    _unique(case.truth.steps, "真相步骤")
-    dependencies = [a.requires for a in case.scene.actions]
-    dependencies += [case.lie.counterevidence, case.lie.admission_presented]
-    for dep in dependencies:
-        refs = _unique(dep.all_of, "all_of") | _unique(dep.any_of, "any_of")
-        if not refs <= evidence_ids:
-            raise ValueError("证据依赖引用不存在。")
-    for action in case.scene.actions:
-        if action.evidence_id not in evidence_ids:
-            raise ValueError("调查动作授予的证据不存在。")
-    for effect in case.lie.effects:
-        if effect.evidence_id not in evidence_ids:
-            raise ValueError("出示效果引用的证据不存在。")
-    for knowledge in case.knowledge:
-        if not knowledge.known_by or not set(knowledge.known_by) <= suspects:
-            raise ValueError("知识归属缺失或角色不存在。")
-    if case.lie.admitted_knowledge_id not in knowledge_ids:
-        raise ValueError("承认披露的知识不存在。")
-    for knowledge in case.knowledge:
-        if knowledge.disclosure == "ADMITTED" and (
-            knowledge.id != case.lie.admitted_knowledge_id or case.npc.id not in knowledge.known_by
-        ):
-            raise ValueError("切片的私有知识必须由本 NPC 的谎言披露。")
-    admitted = next(k for k in case.knowledge if k.id == case.lie.admitted_knowledge_id)
-    if admitted.disclosure != "ADMITTED" or case.npc.id not in admitted.known_by:
-        raise ValueError("承认条目必须是本 NPC 的私有知识。")
-    _validate_interrogation(case, evidence_ids)
-    if not (case.lie.counterevidence.all_of or case.lie.counterevidence.any_of):
-        raise ValueError("谎言必须具有反证硬门槛。")
-    if case.lie.admission_pressure_min is None and case.lie.admission_trust_min is None:
-        raise ValueError("承认必须显式启用至少一条心理门槛。")
+    del action_ids, knowledge_ids, lie_ids, suspects, weapons, motives
 
-    # Fixed-point reachability respects all/any, including cycles with an external entry.
+    # 2. Every reference must exist.
+    granted: set[str] = set()
+    for scene in case.scenes:
+        _require_dependency(scene.unlock, evidence_ids, "场景开放条件")
+        for action in scene.actions:
+            if action.evidence_id not in evidence_ids:
+                raise ValueError("调查动作授予的证据不存在。")
+            granted.add(action.evidence_id)
+            _require_dependency(action.requires, evidence_ids, "调查动作前置")
+    if granted != set(evidence_ids):
+        raise ValueError("存在不被任何调查动作授予的证据。")
+    _require_dependency(case.deep_unlock, evidence_ids, "深入调查条件")
+    for lie in case.lies:
+        _require_dependency(lie.counterevidence, evidence_ids, "反证")
+        _require_dependency(lie.admission_presented, evidence_ids, "承认材料")
+    for knowledge in case.knowledge:
+        if not knowledge.known_by or not set(knowledge.known_by) <= set(character_ids):
+            raise ValueError("知识归属缺失或角色不存在。")
+    for character in case.characters:
+        if not set(character.core_lie_ids) <= set(lie_map):
+            raise ValueError("core_lie_ids 引用了不存在的谎言层。")
+
+    # 3. All evidence reachable from an empty start; lie progress is never a prerequisite.
     reached: frozenset[str] = frozenset()
     while True:
+        opened = {s.id for s in case.scenes if s.unlock.satisfied(reached)}
         next_reached = reached | {
-            a.evidence_id for a in case.scene.actions if a.requires.satisfied(reached)
+            a.evidence_id
+            for s in case.scenes
+            if s.id in opened
+            for a in s.actions
+            if a.requires.satisfied(reached)
         }
         if next_reached == reached:
             break
         reached = next_reached
-    if reached != evidence_ids:
+    if reached != set(evidence_ids):
         raise ValueError("存在不可达证据或阻断通关的循环依赖。")
 
+    # 4. At least one scene is open at the start.
+    if not any(not scene.unlock.all_of and not scene.unlock.any_of for scene in case.scenes):
+        raise ValueError("必须存在开局即开放的场景。")
+
+    # 5. Interrogatable characters and suspects.
+    for character in case.characters:
+        if not character.interrogatable:
+            continue
+        if character.initial_pressure is None or character.initial_trust is None:
+            raise ValueError("可审讯人物必须配置初始压力与信任。")
+        if character.personality is None or character.speech_style is None:
+            raise ValueError("可审讯人物必须配置性格与说话风格。")
+        if not chains_of(case, character.id) and character.default_reply is None:
+            raise ValueError("没有谎言链的可审讯人物必须配置默认回复。")
+    for choice in case.suspects:
+        if choice.id not in characters or not characters[choice.id].interrogatable:
+            raise ValueError("嫌疑人候选必须是可审讯人物。")
+
+    # 6. Lie layers and chains.
+    chain_of: dict[str, str] = {}
+    for chain in case.lie_chains:
+        if not chain.lie_ids:
+            raise ValueError("谎言链不能为空。")
+        if chain.npc_id not in characters or not characters[chain.npc_id].interrogatable:
+            raise ValueError("谎言链必须属于可审讯人物。")
+        for lie_id in chain.lie_ids:
+            if lie_id not in lie_map:
+                raise ValueError("谎言链引用了不存在的谎言层。")
+            if lie_id in chain_of:
+                raise ValueError("每个谎言层必须恰好属于一条链。")
+            if lie_map[lie_id].npc_id != chain.npc_id:
+                raise ValueError("谎言链的角色与层不一致。")
+            chain_of[lie_id] = chain.id
+    if set(chain_of) != set(lie_map):
+        raise ValueError("每个谎言层必须恰好属于一条链。")
+    admitted_refs: dict[str, str] = {}
+    effects_by_npc: dict[str, set[str]] = {}
+    for lie in case.lies:
+        if not (lie.counterevidence.all_of or lie.counterevidence.any_of):
+            raise ValueError("谎言层必须具有反证硬门槛。")
+        if lie.admission_pressure_min is None and lie.admission_trust_min is None:
+            raise ValueError("谎言层必须显式启用至少一条心理门槛。")
+        knowledge = knowledge_map.get(lie.admitted_knowledge_id)
+        if knowledge is None or knowledge.disclosure != "ADMITTED":
+            raise ValueError("承认必须披露一条 ADMITTED 知识。")
+        if lie.npc_id not in knowledge.known_by:
+            raise ValueError("承认知识的说话人必须在该知识的 known_by 中。")
+        if lie.admitted_knowledge_id in admitted_refs:
+            raise ValueError("每条 ADMITTED 知识必须被恰好一层引用。")
+        admitted_refs[lie.admitted_knowledge_id] = lie.id
+        layer_refs = (
+            set(lie.counterevidence.all_of)
+            | set(lie.counterevidence.any_of)
+            | set(lie.admission_presented.all_of)
+            | set(lie.admission_presented.any_of)
+        )
+        effect_ids = _unique((effect.evidence_id for effect in lie.effects), "层内效果证据")
+        if not set(effect_ids) <= layer_refs:
+            raise ValueError("效果证据必须是本层反证或承认材料之一。")
+        seen = effects_by_npc.setdefault(lie.npc_id, set())
+        if seen & set(effect_ids):
+            raise ValueError("同一人物的不同层不能对同一证据都配置效果。")
+        seen |= set(effect_ids)
+    for knowledge in case.knowledge:
+        if knowledge.disclosure == "ADMITTED" and knowledge.id not in admitted_refs:
+            raise ValueError("存在没有被任何谎言层引用的 ADMITTED 知识。")
+    for character in case.characters:
+        for lie_id in character.core_lie_ids:
+            if lie_map[lie_id].npc_id != character.id:
+                raise ValueError("core_lie_ids 只能引用本人物的谎言层。")
+
+    # 7. Every chain must be able to reach a full admission from the worst trust of 0.
+    for chain in case.lie_chains:
+        character = characters[chain.npc_id]
+        npc = NPCState(
+            character.initial_pressure,
+            0,
+            {lie_id: LieStage.UNBROKEN for lie_id in chain.lie_ids},
+        )
+        state = GameState(
+            npcs={chain.npc_id: npc},
+            phase=Phase.INTERROGATION,
+            active_npc_id=chain.npc_id,
+            evidence_ids=frozenset(evidence_ids),
+        )
+        for lie_id in chain.lie_ids:
+            lie = lie_by_id(case, lie_id)
+            materials = (
+                set(lie.counterevidence.all_of)
+                | set(lie.counterevidence.any_of)
+                | set(lie.admission_presented.all_of)
+                | set(lie.admission_presented.any_of)
+            )
+            for evidence_id in sorted(materials):
+                state = present(case, state, chain.npc_id, evidence_id)
+        if not all(
+            state.npcs[chain.npc_id].lies[lie_id] == LieStage.ADMITTED for lie_id in chain.lie_ids
+        ):
+            raise ValueError("承认不可达：反证、可信度或心理门槛使某层无法被承认。")
+
+    # 8. Topics.
+    topics_by_knowledge: dict[str, str] = {}
+    for topic in case.interrogation.topics:
+        character = characters.get(topic.npc_id)
+        if character is None or not character.interrogatable:
+            raise ValueError("话题必须属于可审讯人物。")
+        knowledge = knowledge_map.get(topic.knowledge_id)
+        if knowledge is None or knowledge.disclosure != "ASKED":
+            raise ValueError("话题必须登记一条 ASKED 知识。")
+        if topic.npc_id not in knowledge.known_by:
+            raise ValueError("话题的说话人必须在该知识的 known_by 中。")
+        if topic.knowledge_id in topics_by_knowledge:
+            raise ValueError("每条 ASKED 知识必须恰好有一个话题。")
+        topics_by_knowledge[topic.knowledge_id] = topic.id
+    for knowledge in case.knowledge:
+        if knowledge.disclosure == "ASKED" and knowledge.id not in topics_by_knowledge:
+            raise ValueError("存在没有话题的 ASKED 知识。")
+
+    # 9. Contradictions.
+    _unique(
+        ((c.npc_id, c.knowledge_id, c.evidence_id) for c in case.interrogation.contradictions),
+        "矛盾配对",
+    )
+    verified = {e.id for e in case.evidence if e.credibility == "VERIFIED"}
+    for contradiction in case.interrogation.contradictions:
+        knowledge = knowledge_map.get(contradiction.knowledge_id)
+        if knowledge is None or knowledge.disclosure == "PUBLIC":
+            raise ValueError("矛盾必须引用一条私有证词。")
+        if knowledge_speaker(case, contradiction.knowledge_id) != contradiction.npc_id:
+            raise ValueError("矛盾的证词说话人必须是该人物。")
+        if contradiction.evidence_id not in set(evidence_ids):
+            raise ValueError("矛盾引用的证据不存在。")
+        if contradiction.evidence_id not in verified:
+            raise ValueError("矛盾所依据的证据必须有核验来源。")
+
+    # 10. Relationships.
+    for relationship in case.relationships:
+        if relationship.from_id not in characters or relationship.to_id not in characters:
+            raise ValueError("关系端点必须是已定义的人物。")
+        if not set(relationship.reveal_evidence_ids) <= set(evidence_ids) or not set(
+            relationship.reveal_knowledge_ids
+        ) <= set(knowledge_map):
+            raise ValueError("关系揭示条件引用不存在。")
+        if relationship.source_kind == "PUBLIC":
+            if (
+                relationship.source_id is not None
+                or relationship.reveal_evidence_ids
+                or relationship.reveal_knowledge_ids
+            ):
+                raise ValueError("公开关系不能配置来源或揭示条件。")
+        elif relationship.source_kind == "EVIDENCE":
+            if relationship.source_id not in relationship.reveal_evidence_ids:
+                raise ValueError("证据来源关系必须揭示其来源证据。")
+        elif relationship.source_id not in characters:
+            raise ValueError("角色来源关系必须指向已定义的人物。")
+
+    # 11. Timeline.
+    for event in case.timeline:
+        if event.scene_id is not None and event.scene_id not in set(scene_ids):
+            raise ValueError("时间线场景不存在。")
+        if not set(event.participant_ids) <= set(character_ids):
+            raise ValueError("时间线参与者不存在。")
+        if not set(event.reveal_evidence_ids) <= set(evidence_ids) or not set(
+            event.reveal_knowledge_ids
+        ) <= set(knowledge_map):
+            raise ValueError("时间线揭示条件引用不存在。")
+        if event.precision == "EXACT":
+            if event.start_minutes is None or event.start_minutes != event.end_minutes:
+                raise ValueError("EXACT 事件的起止必须相等且非空。")
+        elif event.precision == "RANGE":
+            if (
+                event.start_minutes is None
+                or event.end_minutes is None
+                or event.start_minutes > event.end_minutes
+            ):
+                raise ValueError("RANGE 事件必须配置合法的起止分钟。")
+        elif event.start_minutes is not None or event.end_minutes is not None:
+            raise ValueError("UNKNOWN 事件不能配置分钟数。")
+        for other in event.conflicts_with:
+            counterpart = timeline_map.get(other)
+            if (
+                other == event.id
+                or counterpart is None
+                or event.id not in counterpart.conflicts_with
+            ):
+                raise ValueError("时间线冲突不能指向自身，且必须对称。")
+
+    _validate_scoring(case, evidence_ids, verified, steps)
+
+
+def _validate_scoring(case: Case, evidence_ids: set[str], verified: set[str], steps) -> None:
+    truth_ok = (
+        case.truth.culprit in {c.id for c in case.suspects}
+        and case.truth.weapon in {c.id for c in case.weapons}
+        and case.truth.motive in {c.id for c in case.motives}
+        and bool(case.truth.steps)
+        and set(case.truth.steps) <= steps
+    )
+    if not truth_ok:
+        raise ValueError("真相必须引用合法的候选项和非空步骤。")
+    _unique(case.truth.steps, "真相步骤")
     scoring = case.scoring
     if not 0 < scoring.partial_min < scoring.correct_min <= 100:
         raise ValueError("评分阈值必须满足 0 < 部分正确 < 正确 <= 100。")
@@ -107,80 +316,13 @@ def validate_case(case: Case) -> None:
                 or not set(criterion.evidence_ids) <= evidence_ids
             ):
                 raise ValueError("证据评分必须引用正确步骤和非空的有效证据。")
-            if any(
-                e.credibility != "VERIFIED" for e in case.evidence if e.id in criterion.evidence_ids
-            ):
+            if not set(criterion.evidence_ids) <= verified:
                 raise ValueError("评分所需证据必须有核验来源。")
         elif criterion.step_id is not None or criterion.evidence_ids:
             raise ValueError("答案评分不能夹带证据条件。")
     unsupported_max = sum(c.points for c in scoring.criteria if c.kind != "support")
     if unsupported_max >= scoring.correct_min:
         raise ValueError("无证据的猜测不能达到正确阈值。")
-
-    # Search every order of the lie's own evidence for an attainable admission, both from the
-    # initial values and after every irrelevant-move cost a player could pay first.
-    relevant = sorted(relevant_evidence(case, case.npc.id))
-    for trust in (case.npc.initial_trust, _worst_trust(case)):
-        for order in permutations(relevant):
-            state = GameState(
-                npc=NPCState(case.npc.initial_pressure, trust),
-                phase=Phase.INTERROGATION,
-                active_npc_id=case.npc.id,
-                evidence_ids=reached,
-            )
-            for evidence_id in order:
-                state = present(case, state, case.npc.id, evidence_id)
-            if state.npc.lie_stage == LieStage.ADMITTED:
-                break
-        else:
-            raise ValueError("反证、可信度、数值门槛或无关操作的代价使承认不可达。")
-
-
-def _validate_interrogation(case: Case, evidence_ids: set[str]) -> None:
-    rules = case.interrogation
-    knowledge = {k.id: k for k in case.knowledge}
-    _unique((t.id for t in rules.topics), "话题")
-    _unique((c.id for c in rules.contradictions), "矛盾")
-    _unique(((c.knowledge_id, c.evidence_id) for c in rules.contradictions), "矛盾配对")
-    for topic in rules.topics:
-        target = knowledge.get(topic.knowledge_id)
-        if (
-            topic.npc_id != case.npc.id
-            or target is None
-            or target.disclosure != "ASKED"
-            or case.npc.id not in target.known_by
-        ):
-            raise ValueError("话题必须由本 NPC 回答，并登记一条 ASKED 证词。")
-    asked = {t.knowledge_id for t in rules.topics}
-    if any(k.disclosure == "ASKED" and k.id not in asked for k in case.knowledge):
-        raise ValueError("ASKED 证词必须有对应的话题。")
-    verified = {e.id for e in case.evidence if e.credibility == "VERIFIED"}
-    for contradiction in rules.contradictions:
-        target = knowledge.get(contradiction.knowledge_id)
-        if (
-            contradiction.npc_id != case.npc.id
-            or target is None
-            or target.disclosure == "PUBLIC"
-            or case.npc.id not in target.known_by
-        ):
-            raise ValueError("矛盾必须引用本 NPC 可被记录的证词。")
-        if contradiction.evidence_id not in evidence_ids:
-            raise ValueError("矛盾引用的证据不存在。")
-        if contradiction.evidence_id not in verified:
-            raise ValueError("矛盾所依据的证据必须有核验来源。")
-
-
-def _worst_trust(case: Case) -> int:
-    """Trust after every one-time cost a player can pay before the admission."""
-    rules = case.interrogation
-    relevant = relevant_evidence(case, case.npc.id)
-    irrelevant = [e.id for e in case.evidence if e.id not in relevant]
-    asked = [k.id for k in case.knowledge if k.disclosure == "ASKED"]
-    valid = {(c.knowledge_id, c.evidence_id) for c in rules.contradictions}
-    mismatches = [(k, e.id) for k in asked for e in case.evidence if (k, e.id) not in valid]
-    costs = rules.irrelevant_trust * (len(irrelevant) + len(mismatches))
-    costs += sum(min(0, c.trust) for c in rules.contradictions)
-    return max(0, case.npc.initial_trust + costs)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
@@ -210,12 +352,32 @@ def load_case(path: Path | None = None) -> Case:
     return parse_case(text)
 
 
+# Order-insensitive ID sets, and the collection keys whose element order is not part of the
+# definition. Order-sensitive lists (truth steps, chain layer order) are kept as stored.
+_SORTED_ID_LISTS = frozenset(
+    {
+        "all_of",
+        "any_of",
+        "known_by",
+        "reveal_evidence_ids",
+        "reveal_knowledge_ids",
+        "conflicts_with",
+        "participant_ids",
+        "core_lie_ids",
+        "evidence_ids",
+    }
+)
+
+
 def _canonical(value):
     if isinstance(value, dict):
         result = {key: _canonical(item) for key, item in value.items()}
-        for key in ("all_of", "any_of", "known_by"):
-            if key in result:
-                result[key] = sorted(result[key])
+        for key, item in result.items():
+            if isinstance(item, list) and item and isinstance(item[0], dict):
+                sort_key = "id" if "id" in item[0] else "evidence_id"
+                result[key] = sorted(item, key=lambda entry: entry[sort_key])
+            elif key in _SORTED_ID_LISTS and isinstance(item, list):
+                result[key] = sorted(item)
         return result
     if isinstance(value, list):
         return [_canonical(item) for item in value]
@@ -225,6 +387,5 @@ def _canonical(value):
 def content_hash(case: Case) -> str:
     """SHA-256 of the canonical definition: sorted keys and ID sets, ordered steps kept."""
     data = _canonical(case.model_dump(mode="json"))
-    data["knowledge"] = sorted(data["knowledge"], key=lambda item: item["id"])
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode()).hexdigest()
