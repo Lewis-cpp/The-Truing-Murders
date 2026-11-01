@@ -148,9 +148,12 @@ function contradict() {
           v-model="question"
           data-testid="chat-input"
           maxlength="2000"
-          placeholder="提问（本版本只返回固定说法）"
+          placeholder="向当前角色提问"
+          @keyup.enter="ask"
         />
-        <ElButton :disabled="game.busy || !question.trim()" @click="ask">提问</ElButton>
+        <ElButton data-testid="chat-send" :disabled="game.busy || !question.trim()" @click="ask">
+          提问
+        </ElButton>
       </div>
       <div class="row">
         <ElSelect v-model="evidenceId" placeholder="选择要出示的证据" style="width: 260px">

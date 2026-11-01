@@ -11,6 +11,10 @@ const categories = {
   INCORRECT: { text: '错误', type: 'danger' },
 } as const
 const verdict = computed(() => review.value.accusation.verdict)
+const truthSteps = computed(
+  () =>
+    (review.value.truth as { ordered_process_step_ids?: string[] }).ordered_process_step_ids ?? [],
+)
 </script>
 
 <template>
@@ -39,6 +43,30 @@ const verdict = computed(() => review.value.accusation.verdict)
       </ElTable>
       <h3>案情真相</h3>
       <p>{{ review.truth.explanation }}</p>
+      <h3>真相步骤与玩家关联的证据</h3>
+      <ol class="truth-steps">
+        <li v-for="step in truthSteps" :key="step">
+          {{ review.truth.labels[step] ?? step }}
+          <span class="linked">
+            玩家关联证据：
+            {{
+              review.accusation.content.step_evidence_links
+                .filter((link) => link.step_id === step)
+                .map((link) => link.evidence_id)
+                .join('、') || '（未关联）'
+            }}
+          </span>
+          <span
+            v-for="criterion in verdict.criteria.filter((item) => item.criterion_id === step)"
+            :key="criterion.criterion_id"
+            class="missing"
+          >
+            <template v-if="criterion.missing_evidence_ids.length">
+              缺失证据：{{ criterion.missing_evidence_ids.join('、') }}
+            </template>
+          </span>
+        </li>
+      </ol>
       <h3 v-if="review.missed_evidence.length">遗漏的证据（复盘展示，不补入背包）</h3>
       <ul>
         <li v-for="item in review.missed_evidence" :key="item.evidence_id">
@@ -63,5 +91,13 @@ const verdict = computed(() => review.value.accusation.verdict)
 }
 .missing {
   color: var(--el-color-warning);
+}
+.truth-steps {
+  display: grid;
+  gap: 6px;
+  padding-left: 20px;
+}
+.linked {
+  color: var(--el-text-color-secondary);
 }
 </style>

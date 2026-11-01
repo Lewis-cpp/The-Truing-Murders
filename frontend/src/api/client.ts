@@ -23,7 +23,7 @@ export class ApiError extends Error {
 /** The request may or may not have been saved; resend it with the same key to find out. */
 export class UncertainError extends Error {
   constructor() {
-    super('网络中断，无法确认本次操作是否已保存。请重试同一操作。')
+    super('网络中断，本次操作未确认保存；可用原键重试同一操作。')
   }
 }
 
