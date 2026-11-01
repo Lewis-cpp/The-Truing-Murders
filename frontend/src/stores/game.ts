@@ -60,6 +60,9 @@ export const useGameStore = defineStore('game', () => {
   const stale = ref(false)
   const pending = ref<PendingWrite | null>(null)
   const conversations = ref<ConversationView[]>([])
+  // Evidence ids the reasoning board asks the accusation form to cite; the form drains
+  // the queue because the form state itself stays local to that component.
+  const citeRequests = ref<string[]>([])
   // The round the page is polling for, if any; the timer itself stays non-reactive.
   const pollingId = ref<string | null>(null)
   let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -245,6 +248,7 @@ export const useGameStore = defineStore('game', () => {
     stale,
     pending,
     conversations,
+    citeRequests,
     pollingId,
     stopPolling,
     emptyDraft,
@@ -335,5 +339,8 @@ export const useGameStore = defineStore('game', () => {
     submit: (content: AccusationContent) =>
       run(newWrite('POST', `${base()}/accusation`, { content, confirm: true }, version())),
     finish: () => run(newWrite('PUT', `${base()}/review-completion`, {}, version())),
+    citeEvidence: (evidenceId: string) => {
+      citeRequests.value.push(evidenceId)
+    },
   }
 })
