@@ -21,18 +21,24 @@
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.5 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.6 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
+| v1.0 | 是 | 否 | 否 | 否 | 否 |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. v1.0 阶段开始（下一轮次直接执行）：从标签 `v0.6` 切分支 `feat/v1.0-<主题>`；启用
-   `docs/specs/v1.0/tests`（axe-core 前端 dev 依赖按规格加入）并立即单独提交
-   "Add v1.0 acceptance tests"；跑基线；拆任务。v1.0 范围：模型接入的可见性收口、
-   视觉与可访问性收尾、最终交付；自 v0.6 起新增玩法已冻结。
-2. 补做真实模型评测（v0.4 npc01、v0.5 four_npcs、v0.6 无新增）：配置凭据后
-   `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm`，结果计入对应交付记录与 v1.0 收尾。
-3. 远程 CI：e2e 任务已写入 ci.yml，待推送后在 GitHub Actions 上确认；本地预演已全绿。
+1. T25 视觉与可访问性：`frontend/src/styles/theme.css`（Element Plus 变量；`--tm-motion-duration`
+   默认 180ms、`prefers-reduced-motion: reduce` 下 0ms）；响应式布局 ≥1200 三栏、768～1199 两栏、
+   <768 单栏+标签切换（默认"场景"、进审讯自动切"审讯"），任何宽度与 200% 缩放无横向滚动；
+   `role="status"`/`role="alert"` 播报、按钮可访问名称、键盘核心路径与焦点管理；axe-core 入
+   前端 dev 组并修 `color-contrast` 等严重问题。让 a11y.test.ts 与 e2e/test_accessibility.py 转绿。
+2. T27 发布总验收：README 补 `pytest tests/performance -m performance` 与
+   `RUN_LIVE_LLM_TESTS=1` 两条命令；全新环境按 README 复现安装与通关（AI 开/关各一次，尽力而为、
+   如实记录）；`docs/test-report.md`（第 14 篇 P0 矩阵逐项：通过/未通过/未执行）；
+   `docs/traceability.md` 终版；`docs/23-v1.0-delivery.md`；确认无未说明 skip、无凭据/报告入库；
+   打 v1.0 标签。
+3. T26 玩家试用：可选；无试用则在交付记录写"未进行"，不编造反馈。
+4. 补做真实模型评测（v0.4/v0.5）：配置凭据后 `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm`。
 
 ## 阻塞与需要人处理的事项
 
@@ -45,6 +51,10 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v1.0 · v0.6..HEAD（阶段开始：3 个验收文件入库，264 行）。
+  基线：后端 534 过 3 败 1 跳过（hygiene：README 缺 2 条命令、23 号交付与 test-report 未建；
+  deselect 含 5 项 a11y e2e）；前端 34 过 1 败（theme.css）。ruff/alembic check 通过。
+  下一步 T25。
 - 2026-11-02 · v0.6 · 3ab58c6..HEAD（T22～T24：图表/表单契约、恢复演练、部署、E2E 与性能）。
   echarts 图表+时间线 composable（纯投影）、指控表单契约与全部页面 testid、恢复演练 4 项
   （演练 1 修订 cookie 时点，记入 test-amendments）、备份演练手动执行（dump 149674B → 重建 →
