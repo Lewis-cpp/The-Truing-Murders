@@ -21,24 +21,20 @@
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.5 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.6 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
-| v1.0 | 是 | 否 | 否 | 否 | 否 |
+| v1.0 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. T25 视觉与可访问性：`frontend/src/styles/theme.css`（Element Plus 变量；`--tm-motion-duration`
-   默认 180ms、`prefers-reduced-motion: reduce` 下 0ms）；响应式布局 ≥1200 三栏、768～1199 两栏、
-   <768 单栏+标签切换（默认"场景"、进审讯自动切"审讯"），任何宽度与 200% 缩放无横向滚动；
-   `role="status"`/`role="alert"` 播报、按钮可访问名称、键盘核心路径与焦点管理；axe-core 入
-   前端 dev 组并修 `color-contrast` 等严重问题。让 a11y.test.ts 与 e2e/test_accessibility.py 转绿。
-2. T27 发布总验收：README 补 `pytest tests/performance -m performance` 与
-   `RUN_LIVE_LLM_TESTS=1` 两条命令；全新环境按 README 复现安装与通关（AI 开/关各一次，尽力而为、
-   如实记录）；`docs/test-report.md`（第 14 篇 P0 矩阵逐项：通过/未通过/未执行）；
-   `docs/traceability.md` 终版；`docs/23-v1.0-delivery.md`；确认无未说明 skip、无凭据/报告入库；
-   打 v1.0 标签。
-3. T26 玩家试用：可选；无试用则在交付记录写"未进行"，不编造反馈。
-4. 补做真实模型评测（v0.4/v0.5）：配置凭据后 `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm`。
+规格阶段（v0.3～v1.0）已全部完成。剩余事项均需启动者或外部条件：
+
+1. 推送与合并：v0.3～v1.0 的本地提交与标签（v0.3～v1.0 五个标签）待推送；远程 CI 的
+   e2e 任务待推送后在 GitHub Actions 确认。
+2. 真实模型评测：v0.4（npc01）与 v0.5（four_npcs）live 套件待凭据；
+   `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm`，结果计入对应交付记录。
+3. 玩家试用（T26，可选）：未进行。
+4. W1 遗留人工复核：`week_one_verdicts.json` 评分预期与 `guard.json`、案件预期待真人审阅。
 
 ## 阻塞与需要人处理的事项
 
@@ -51,6 +47,14 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v1.0 · 85aa9bc..HEAD（T25～T27：主题与响应式、可访问性、发布总验收）。
+  theme.css（动效开关/对比度/焦点）、三栏到单栏标签布局、role 播报与证据详情焦点管理；
+  axe-core 入 dev 组并修复全部严重对比度违规（含动画中段测色的根因：颜色不再过渡）；
+  发布卫生与 traceability 全过；全新克隆按 README 复现安装与 AI 关开局（浏览器通关由
+  e2e 在新建 schema 覆盖）；AI 开通关与 live 评测无凭据未执行（如实记录）。
+  收尾复跑：后端 537 过 0 败、e2e 11/11、性能 P95 78ms、前端 35/35、hygiene 全过。
+  交付记录 docs/23-v1.0-delivery.md 与 docs/test-report.md；标签 v1.0 本地已打，待推送。
+  规格阶段全部完成。
 - 2026-11-02 · v1.0 · v0.6..HEAD（阶段开始：3 个验收文件入库，264 行）。
   基线：后端 534 过 3 败 1 跳过（hygiene：README 缺 2 条命令、23 号交付与 test-report 未建；
   deselect 含 5 项 a11y e2e）；前端 34 过 1 败（theme.css）。ruff/alembic check 通过。
