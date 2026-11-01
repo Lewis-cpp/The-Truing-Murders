@@ -5,13 +5,13 @@
 
 ## 当前状态
 
-- 当前阶段：v0.5（验收测试已启用，实现未开始）
-- 当前分支：feat/v0.5-four-npcs-memory（自标签 v0.4 切出）
-- 最近一次完整检查：v0.5 基线（2026-11-02）：后端 pytest 因 `tests/application/test_memory.py`
-  收集期失败中断（缺 `MemorySummary` 等待实现名字）；单跑新验收集：
-  test_four_npcs 4 败 2 过、test_long_conversation 1 败、concurrency 1 败；
-  ruff format/check 通过（77 文件）、`alembic check` 无差异。前端 28/28、build 通过（无新前端验收）。
-- 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`）、v0.4（2026-11-02 打在 `33dad97`；均本地，待推送）
+- 当前阶段：v0.5 已完成（本地收尾，待推送）；下一阶段 v0.6。
+- 当前分支：feat/v0.5-four-npcs-memory
+- 最近一次完整检查：收尾复跑（2026-11-02，干净工作区）：后端 `ruff format --check`（78 文件）、
+  `ruff check`、`pytest -q` 514 项通过 0 失败（2 项 live_llm 按默认配置排除）、`alembic check`
+  无差异（0005 可升级、可降级）；前端 `format:check`、`typecheck`、`lint`、`npm test` 28/28、
+  `build` 全部通过。
+- 已打标签：v0.2、v0.3（`e142ceb`）、v0.4（`33dad97`）、v0.5（本地，待推送）
 
 ## 阶段清单
 
@@ -19,32 +19,22 @@
 | --- | --- | --- | --- | --- | --- |
 | v0.3 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.4 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
-| v0.5 | 是 | 否 | 否 | 否 | 否 |
+| v0.5 | 是 | 是 | 是 | 是 | 是（本地，待推送） |
 | v0.6 | 否 | 否 | 否 | 否 | 否 |
 | v1.0 | 否 | 否 | 否 | 否 | 否 |
 
 ## 下一步
 
-1. T19 授权段与迁移 0005：`authorization_fingerprint`（当前说法+本人已披露知识 ID+出示且持有的
-   证据 ID，规范 JSON sha256；压力/信任/情绪/回避不参与）；迁移 0005（`npc_state.memory_epoch`、
-   `npc_memory_summary` 表按 12 篇 6.2）；业务事务结束前比较全部可审讯人物前后指纹，
-   变化者 `memory_epoch += 1` 并失效摘要（`summary_revision += 1` 清内容与游标）；
-   `conversation.response_plan_json` 冻结该轮 `memory_epoch`；`HistoryRound` 增加
-   `player_message_id`/`npc_message_id`；`build_context` 只取 `memory_epoch` 等于当前值的历史。
-2. T20 摘要与预算：`SummaryItem`/`MemorySummary`/`message_hash`/`summarize`/`summary_is_valid`
-   （摘录不归纳、每条 ≤80 字、从最新往前取到 `max_tokens=300`、`covered_through_seq` 不进最近 6 轮、
-   篡改整份丢弃）；`npc_memory_summary` 读→验→条件更新（失败不重试；表坏照常生成）；
-   摘要作为紧跟 system 的第一条 user 消息；`ContextBudget` 增 `max_history_tokens=1100`、
-   `max_summary_tokens=300` 与三层丢弃顺序。让 `test_memory.py` 全绿。
-3. T21 四角色与交付：`llm_enabled_npcs` 默认四人；`SessionView.session.generation_available`；
-   额度耗尽全员受理即 FALLBACK `GENERATION_BUDGET_EXHAUSTED`、重试 429、调查/指控照常；
-   前端提示"已切换为固定回复"。让 `test_four_npcs.py`、`test_long_conversation.py`、
-   `test_shared_gateway_concurrency.py` 转绿。真实评测（第 5 节）无凭据则交付记录写"未执行"；
-   docs/21-v0.5-delivery.md、README 增补；干净工作区全检查；打 v0.5 标签。
+1. v0.6 阶段开始（下一轮次直接执行）：从标签 `v0.5` 切分支 `feat/v0.6-<主题>`；在仓库根目录
+   执行 `cp -r docs/specs/v0.6/tests/. .` 启用验收测试并立即单独提交 "Add v0.6 acceptance tests"；
+   跑完整检查记录基线；读 docs/specs/v0.6/spec.md 按任务编号拆 2～4 小时任务写回本节。
+   v0.6 引入新依赖（前端 echarts、后端 dev playwright），需更新锁文件。
+2. 补做真实模型评测：v0.4（npc01）与 v0.5（four_npcs）的 live 评测均因无凭据未执行，
+   配置凭据后 `RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm` 补做并把报告计入交付。
 
 ## 阻塞与需要人处理的事项
 
-- 推送、开 PR、合并 main 未获授权：v0.3 的本地提交与标签 `v0.3` 待推送。
+- 推送、开 PR、合并 main 未获授权：v0.3～v0.5 的本地提交与标签均待推送。
 - 人工预期仍待真人复核：`case.json`、`full_case_verdicts.json`、`full_case_paths.json`
   （`review_status=pending_human_review`），以及 W1 遗留的 `week_one_verdicts.json` 13 组评分预期。
   不阻塞 v0.4 实现。
@@ -53,6 +43,13 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.5 · 2929eb0..HEAD（T19～T21：授权段、摘要、四角色与交付）。
+  迁移 0005（memory_epoch + npc_memory_summary）；指纹推进与摘要失效同事务；摘录式摘要
+  （80 字/条、300 token、整份校验）与三层预算（1100/300/4000）；四角色默认共享生成、
+  generation_available、开局冻结预算；调试要点：psycopg 为 None 绑定 JSON null（约束需容忍）、
+  嵌套测试客户端重入 lifespan 需深度计数。后端 514 过 0 败、ruff/alembic check 通过；
+  前端 28/28 全过。交付记录 docs/21-v0.5-delivery.md（四人 live 评测无凭据，未执行）。
+  标签 v0.5 本地已打，待推送。下一步 v0.6。
 - 2026-11-02 · v0.5 · v0.4..2929eb0（阶段开始：6 个验收文件入库，1900 行）。
   基线：后端 pytest 因 test_memory.py 收集错误中断（缺 MemorySummary 等）；单跑：
   test_four_npcs 4 败 2 过、test_long_conversation 1 败、concurrency 1 败；
