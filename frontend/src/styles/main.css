@@ -10,9 +10,60 @@ body {
 }
 
 .game {
-  max-width: 1100px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 24px 16px 64px;
+}
+
+/* Three columns on wide screens, two on tablets, one column with tabs on phones.
+   minmax(0, ...) keeps long content from forcing horizontal scrolling. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1199px) {
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .col-board {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .col.hidden {
+    display: none;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 8px 0;
+    border: 1px solid var(--el-border-color);
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+  .tab.active {
+    background: var(--el-color-primary);
+    color: #fff;
+    border-color: var(--el-color-primary);
+  }
 }
 
 .game .el-card,
@@ -22,7 +73,7 @@ body {
 }
 
 .eyebrow {
-  color: #8a7650;
+  color: #6e5a35;
   letter-spacing: 0.15em;
   font-size: 0.8rem;
   margin: 0;

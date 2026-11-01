@@ -150,7 +150,7 @@ onUnmounted(() => {
   height: 260px;
 }
 .desc {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
 }
 .conflict {
   color: var(--el-color-danger);

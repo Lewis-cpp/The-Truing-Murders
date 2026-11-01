@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ElCard, ElEmpty, ElTag } from 'element-plus'
+import { computed, nextTick, ref } from 'vue'
+import { ElButton, ElCard, ElEmpty, ElTag } from 'element-plus'
 import { useGameStore } from '../../stores/game'
 import type { EvidenceView } from '../../api/types'
 
@@ -9,9 +9,20 @@ const selectedId = ref<string | null>(null)
 const selected = computed(
   () => game.view?.evidence.find((item) => item.evidence_id === selectedId.value) ?? null,
 )
+// Opening moves focus into the detail; closing hands it back to the trigger button.
+const detailEl = ref<HTMLElement | null>(null)
+const trigger = ref<HTMLButtonElement | null>(null)
 
-function open(item: EvidenceView) {
+function open(item: EvidenceView, event: Event) {
+  trigger.value = event.currentTarget as HTMLButtonElement
   selectedId.value = item.evidence_id
+  void nextTick(() => detailEl.value?.focus())
+}
+
+function close() {
+  selectedId.value = null
+  trigger.value?.focus()
+  trigger.value = null
 }
 </script>
 
@@ -21,7 +32,11 @@ function open(item: EvidenceView) {
       <ElEmpty v-if="!game.view?.evidence.length" description="尚未取得证据。" :image-size="60" />
       <ul data-testid="evidence-list" class="bag">
         <li v-for="item in game.view?.evidence" :key="item.evidence_id">
-          <button class="entry" :data-testid="`evidence-${item.evidence_id}`" @click="open(item)">
+          <button
+            class="entry"
+            :data-testid="`evidence-${item.evidence_id}`"
+            @click="open(item, $event)"
+          >
             {{ item.evidence_id }} · {{ item.name }}
           </button>
           <ElTag size="small" :type="item.credibility === 'VERIFIED' ? 'success' : 'warning'">
@@ -50,10 +65,13 @@ function open(item: EvidenceView) {
       </article>
     </ElCard>
     <ElCard v-if="selected" header="证据详情">
-      <div data-testid="evidence-detail">
+      <div data-testid="evidence-detail" ref="detailEl" tabindex="-1">
         <h3>{{ selected.evidence_id }} · {{ selected.name }}</h3>
         <p>{{ selected.content }}</p>
         <p class="source">来源：{{ selected.source.label }}</p>
+        <ElButton size="small" data-testid="close-evidence-detail" @click="close">
+          关闭详情
+        </ElButton>
       </div>
     </ElCard>
   </div>
@@ -79,7 +97,7 @@ function open(item: EvidenceView) {
   margin-top: 12px;
 }
 .source {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
   font-size: 12px;
 }
 </style>

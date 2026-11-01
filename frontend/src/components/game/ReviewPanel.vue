@@ -90,7 +90,7 @@ const truthSteps = computed(
 
 <style scoped>
 .explanation {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
 }
 .missing {
   color: var(--el-color-warning);
@@ -101,6 +101,6 @@ const truthSteps = computed(
   padding-left: 20px;
 }
 .linked {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
 }
 </style>

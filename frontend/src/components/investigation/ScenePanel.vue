@@ -49,7 +49,7 @@ const canInvestigate = computed(
   gap: 8px;
 }
 .reason {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
   font-size: 12px;
   margin-left: 8px;
 }

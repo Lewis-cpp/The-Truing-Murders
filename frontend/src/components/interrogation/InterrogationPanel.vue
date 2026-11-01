@@ -235,10 +235,10 @@ function contradict() {
   padding-top: 6px;
 }
 .player {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
 }
 .pending {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
   font-style: italic;
 }
 .statement {
@@ -254,7 +254,7 @@ function contradict() {
   flex-wrap: wrap;
 }
 .hint {
-  color: var(--el-text-color-secondary);
+  color: var(--tm-text-muted, #5f6672);
   font-size: 12px;
   margin: 0;
 }
