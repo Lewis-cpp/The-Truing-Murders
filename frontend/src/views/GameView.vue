@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
-import { ElAlert, ElButton, ElPopconfirm, ElSkeleton, ElTag } from 'element-plus'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ElAlert, ElButton, ElSkeleton, ElTag } from 'element-plus'
 import { useGameStore } from '../stores/game'
 import StartPanel from '../components/game/StartPanel.vue'
 import ReviewPanel from '../components/game/ReviewPanel.vue'
@@ -31,6 +31,14 @@ const caseInfo = computed(
         c.case_version === game.view?.session.case_version,
     ) ?? game.cases[0],
 )
+// Restarting asks twice: the first click reveals the real confirm button.
+const restartArmed = ref(false)
+
+function confirmRestart() {
+  const target = caseInfo.value
+  restartArmed.value = false
+  if (target) void game.restart(target)
+}
 
 onMounted(game.init)
 // Leaving the page stops the polling; a reload rebuilds it from the pending rounds.
@@ -44,19 +52,29 @@ onUnmounted(() => game.stopPolling())
       <template v-if="game.view">
         <h1>{{ game.view.session.title }}</h1>
         <p class="meta">
-          <ElTag>{{ phases[phase ?? ''] }}</ElTag>
+          <ElTag data-testid="phase">{{ phases[phase ?? ''] }}</ElTag>
           已自动保存于 {{ savedAt }} · 存档版本 {{ game.view.session.state_version }}
-          <ElPopconfirm
-            v-if="caseInfo"
-            title="重开会创建新的一局，当前进度保留为只读。确定重开？"
-            confirm-button-text="重开"
-            cancel-button-text="取消"
-            @confirm="game.restart(caseInfo)"
-          >
-            <template #reference>
-              <ElButton size="small" :disabled="game.busy">重开</ElButton>
-            </template>
-          </ElPopconfirm>
+          <template v-if="caseInfo">
+            <ElButton
+              v-if="!restartArmed"
+              size="small"
+              data-testid="restart-game"
+              :disabled="game.busy"
+              @click="restartArmed = true"
+            >
+              重开
+            </ElButton>
+            <ElButton
+              v-else
+              size="small"
+              type="danger"
+              data-testid="confirm-restart"
+              :disabled="game.busy"
+              @click="confirmRestart"
+            >
+              确认重开（旧局保留为只读）
+            </ElButton>
+          </template>
         </p>
       </template>
     </header>

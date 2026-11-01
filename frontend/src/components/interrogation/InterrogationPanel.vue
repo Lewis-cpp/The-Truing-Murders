@@ -76,6 +76,7 @@ function contradict() {
         <ElButton
           v-if="!npc.is_active"
           size="small"
+          :data-testid="`talk-${npc.npc_id}`"
           :disabled="!actions.includes('SET_INTERROGATION') || game.busy"
           @click="game.talk(npc.npc_id)"
         >
@@ -156,20 +157,17 @@ function contradict() {
         </ElButton>
       </div>
       <div class="row">
-        <ElSelect v-model="evidenceId" placeholder="选择要出示的证据" style="width: 260px">
-          <ElOption
-            v-for="item in game.view?.evidence"
-            :key="item.evidence_id"
-            :label="`${item.evidence_id} · ${item.name}`"
-            :value="item.evidence_id"
-          />
-        </ElSelect>
+        <span>出示：</span>
         <ElButton
+          v-for="item in game.view?.evidence"
+          :key="item.evidence_id"
           type="warning"
-          :disabled="game.busy || !evidenceId"
-          @click="game.present(active.npc_id, evidenceId)"
+          plain
+          :data-testid="`present-${item.evidence_id}`"
+          :disabled="game.busy || !actions.includes('PRESENT_EVIDENCE')"
+          @click="game.present(active.npc_id, item.evidence_id)"
         >
-          出示
+          {{ item.evidence_id }} · {{ item.name }}
         </ElButton>
       </div>
       <div class="row">
@@ -209,7 +207,9 @@ function contradict() {
       <p class="hint">
         出示无关材料或指错矛盾会让对方更戒备；接连这样做，对方会开始回避，直到你结束审讯。
       </p>
-      <ElButton :disabled="game.busy" @click="game.endTalk()">结束审讯</ElButton>
+      <ElButton data-testid="leave-interrogation" :disabled="game.busy" @click="game.endTalk()">
+        结束审讯
+      </ElButton>
     </div>
   </ElCard>
 </template>

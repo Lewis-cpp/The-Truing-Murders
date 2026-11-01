@@ -22,9 +22,11 @@ const truthSteps = computed(
     <div data-testid="review-panel">
       <h2>
         <ElTag :type="categories[verdict.category].type" size="large">
-          {{ categories[verdict.category].text }}
+          <span data-testid="verdict-category">{{ categories[verdict.category].text }}</span>
         </ElTag>
-        {{ verdict.score }} / {{ verdict.max_score }}
+        <span data-testid="verdict-score">{{ verdict.score }}</span>
+        <span class="divider">/</span>
+        {{ verdict.max_score }}
       </h2>
       <p class="explanation">{{ verdict.fixed_explanation }}</p>
       <ElTable :data="verdict.criteria" size="small">
@@ -76,6 +78,7 @@ const truthSteps = computed(
       <ElButton
         v-if="game.view?.session.phase === 'REVIEW'"
         type="primary"
+        data-testid="finish-review"
         :disabled="game.busy"
         @click="game.finish()"
       >

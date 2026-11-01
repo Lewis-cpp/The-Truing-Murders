@@ -19,10 +19,18 @@ const game = useGameStore()
         @confirm="game.start(item)"
       >
         <template #reference>
-          <ElButton type="primary" :loading="game.busy">开始新的一局</ElButton>
+          <ElButton type="primary" data-testid="start-game" :loading="game.busy">
+            开始新的一局
+          </ElButton>
         </template>
       </ElPopconfirm>
-      <ElButton v-else type="primary" :loading="game.busy" @click="game.start(item)">
+      <ElButton
+        v-else
+        type="primary"
+        data-testid="start-game"
+        :loading="game.busy"
+        @click="game.start(item)"
+      >
         开始游戏
       </ElButton>
     </div>

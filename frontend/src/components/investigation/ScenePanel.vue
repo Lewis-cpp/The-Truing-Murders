@@ -24,6 +24,7 @@ const canInvestigate = computed(
               <span>
                 <ElButton
                   :data-testid="`action-${action.action_id}`"
+                  :data-completed="action.completed ? 'true' : undefined"
                   :disabled="!canInvestigate || !action.enabled || game.busy"
                   @click="game.investigate(scene.scene_id, action.action_id)"
                 >
