@@ -5,12 +5,12 @@
 
 ## 当前状态
 
-- 当前阶段：v0.4（T15、T16 已完成；T17 生成编排未开始）
+- 当前阶段：v0.4（T15～T17 已完成；T18 前端与交付未开始）
 - 当前分支：feat/v0.4-npc01-generation（自标签 v0.3 切出）
-- 最近一次完整检查：2026-11-02（T16 提交后）：后端 `pytest -q` 468 过 23 败
-  （失败全部在 `tests/api/test_generation.py`，属 T17 编排范围；382 项旧测试无回归）；
-  ruff format/check 通过；`alembic check` 无差异（迁移 0004 未写）。前端与基线相同
-  （25 过 3 败，generation.test.ts 属 T18）。
+- 最近一次完整检查：2026-11-02（T17 提交后）：后端 `pytest -q` 491 项通过 0 失败
+  （1 项 live_llm 按默认配置跳过）；ruff format/check 通过；`alembic check` 无差异
+  （0004 可升级、可降级）。前端与基线相同：`format:check`、`typecheck`、`lint`、`build`
+  通过，`npm test` 25 过 3 败（generation.test.ts，属 T18）。
 - 已打标签：v0.2、v0.3（2026-11-02 打在 `e142ceb`；本地，待推送）
 
 ## 阶段清单
@@ -25,20 +25,14 @@
 
 ## 下一步
 
-1. T17 生成编排与持久化（从上一会话接着做，先读 docs/specs/v0.4/spec.md 第 6～7 节与
-   tests/api/test_generation.py 的失败清单）：迁移 0004（`llm_attempt` 按 09 篇 6.6 建表、
-   `conversation.active_attempt_id` 复合外键与 PREPARING/GENERATING 的部分 unique 索引、
-   `game_session.llm_budget_json` 回填默认值，可升级可降级）；`app.state.llm_gateway` 与
-   `generation_dispatcher` 注入点（生产为 `llm_concurrency` 有界线程池，启动时按 `llm_enabled`
-   创建，测试可在启动后替换）；6.3 一轮状态机（受理 PREPARING/任务 1～6、额度结算
-   KNOWN/UNKNOWN/NOT_SENT、fallback_reason 公开映射）；6.4 失效（切换/离开/指控/重开置 STALE）、
-   409 GENERATION_BUSY、过期占位清理（绝不自动重发）；6.5 reply-retries 端点与 `can_retry_reply`；
-   第 7 节 API 变化（ConversationView 状态取值、pending_conversations、出示 201 仍即时返回
-   固定结果）。提交后让 `test_generation.py` 转绿（当前 23 败）。
-2. T18 前端与交付：PREPARING/GENERATING 时 1.5 秒轮询与终态停止、`retry-reply` 按钮、
-   `fallback-notice` 提示、`SessionView.pending_conversations`；让 generation.test.ts 转绿；
-   真实样本评测按第 8 节执行（无凭据则交付记录如实写"未执行"）；docs/20-v0.4-delivery.md、
-   README"启用模型"小节；干净工作区重跑全部检查；打 v0.4 标签。
+1. T18 前端与交付：网页在轮次 PREPARING/GENERATING 时显示"回复准备中"并每 1.5 秒轮询
+   `GET /sessions/{id}/conversations/{conversation_id}`，终态停止、离开审讯面板停止；
+   `can_retry_reply` 为真显示 `data-testid="retry-reply"` 按钮（调 reply-retries 后继续轮询）；
+   `FALLBACK` 且原因非 GENERATION_DISABLED 时显示 `data-testid="fallback-notice"`（固定模式不显示）；
+   让 frontend/tests/generation.test.ts 转绿（当前 3 败）。
+2. 真实样本评测（规格第 8 节）：无模型凭据，交付记录如实写"未执行"，不算门槛失败。
+3. 交付：docs/20-v0.4-delivery.md（范围、配置方法、假传输故障清单、真实样本"未执行"、已知限制）、
+   README"启用模型"小节（环境变量、硬预算、如何关闭）；干净工作区重跑全部检查；打 v0.4 标签。
 
 ## 阻塞与需要人处理的事项
 
@@ -51,6 +45,13 @@
 
 <!-- 每轮追加一条：日期、阶段、提交范围、通过/失败数量、要点。最新的在最上面。 -->
 
+- 2026-11-02 · v0.4 · d0e3d41..e83f0a8（T17：生成编排与持久化）。迁移 0004（llm_attempt、
+  conversation.active_attempt_id + 部分唯一索引、llm_budget_json 回填、message.attempt_id）；
+  application/generation.py 任务管线（预留/派发/结算、STALE 复核、额度 KNOWN/UNKNOWN/NOT_SENT）；
+  受理侧忙碌与过期清理、切换/离开/指控同事务失效、reply-retries 端点、main.py 注入点。
+  调试要点：attempt.request_action_id 必须用触发本次尝试的请求（重试有自己的请求），
+  否则唯一约束回滚被任务吞掉。后端 491 过 0 败、ruff/alembic check 通过。
+  下一步 T18。
 - 2026-11-02 · v0.4 · 5dc86ac..d0e3d41（T15～T16：配置+网关、授权上下文+回复检查）。
   T15：Settings 增 llm_* 字段（启用时校验三配置）、httpx2 移入运行依赖、
   `infrastructure/llm_client.py`（错误分类、单次请求、deadline 分块读取、64 KiB、严格 JSON 协议）；
