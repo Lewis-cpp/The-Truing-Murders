@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -96,6 +97,10 @@ class GameSession(Base):
         CheckConstraint("state_version > 0", name="state_version"),
         CheckConstraint("snapshot_schema_version > 0", name="snapshot_schema_version"),
         CheckConstraint("jsonb_typeof(state_json) = 'object'", name="state_json"),
+        CheckConstraint(
+            "llm_budget_json IS NULL OR jsonb_typeof(llm_budget_json) = 'object'",
+            name="llm_budget_json",
+        ),
         Index("ix_game_session_visitor_saved", "visitor_id", "saved_at"),
         Index("ix_game_session_template", "template_id"),
     )
@@ -113,6 +118,8 @@ class GameSession(Base):
     state_version: Mapped[int] = mapped_column(BigInteger)
     snapshot_schema_version: Mapped[int] = mapped_column(Integer)
     state_json: Mapped[dict] = mapped_column(JSONB)
+    # Per-game model budget (calls, tokens, input, output, timeout), frozen at game start.
+    llm_budget_json: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -382,6 +389,19 @@ class Conversation(Base):
             " OR generation_status NOT IN ('PREPARING', 'GENERATING')",
             name="deadline",
         ),
+        ForeignKeyConstraint(
+            ["session_id", "conversation_id", "active_attempt_id"],
+            ["llm_attempt.session_id", "llm_attempt.conversation_id", "llm_attempt.attempt_id"],
+            use_alter=True,
+            **RESTRICT,
+        ),
+        # At most one pending (PREPARING/GENERATING) round per session.
+        Index(
+            "uq_conversation_session_pending",
+            "session_id",
+            unique=True,
+            postgresql_where=text("generation_status IN ('PREPARING', 'GENERATING')"),
+        ),
         Index(
             "ix_conversation_character_seq",
             "session_id",
@@ -402,10 +422,83 @@ class Conversation(Base):
     response_plan_json: Mapped[dict] = mapped_column(JSONB)
     fixed_reply: Mapped[str] = mapped_column(Text)
     generation_status: Mapped[str] = mapped_column(String(16))
+    active_attempt_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     generation_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fallback_reason: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LlmAttempt(Base):
+    """One model generation try: budget reservation, settleable usage and validation."""
+
+    __tablename__ = "llm_attempt"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "attempt_no"),
+        UniqueConstraint("request_action_id"),
+        # Candidate key for conversation.active_attempt_id and message.attempt_id FKs.
+        UniqueConstraint("session_id", "conversation_id", "attempt_id"),
+        ForeignKeyConstraint(
+            ["session_id", "conversation_id"],
+            ["conversation.session_id", "conversation.conversation_id"],
+            **RESTRICT,
+        ),
+        ForeignKeyConstraint(
+            ["session_id", "request_action_id"],
+            ["action_request.session_id", "action_request.action_id"],
+            **RESTRICT,
+        ),
+        CheckConstraint(
+            "status IN ('RESERVED', 'DISPATCHING', 'SUCCEEDED', 'FAILED', 'UNKNOWN',"
+            " 'CANCELLED_NOT_SENT')",
+            name="status",
+        ),
+        CheckConstraint(
+            "usage_status IN ('RESERVED', 'KNOWN', 'UNKNOWN', 'NOT_SENT')", name="usage_status"
+        ),
+        CheckConstraint(
+            "validation_status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'STALE',"
+            " 'NOT_APPLICABLE')",
+            name="validation_status",
+        ),
+        CheckConstraint("attempt_no > 0", name="attempt_no"),
+        CheckConstraint("estimated_input_tokens >= 0", name="estimated_input_tokens"),
+        CheckConstraint("reserved_tokens >= 0", name="reserved_tokens"),
+        CheckConstraint("input_tokens IS NULL OR input_tokens >= 0", name="input_tokens"),
+        CheckConstraint("output_tokens IS NULL OR output_tokens >= 0", name="output_tokens"),
+        CheckConstraint("context_digest ~ '^[0-9a-f]{64}$'", name="context_digest"),
+        Index("ix_llm_attempt_session", "session_id"),
+    )
+
+    attempt_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    request_action_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    attempt_no: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24))
+    usage_status: Mapped[str] = mapped_column(String(16))
+    validation_status: Mapped[str] = mapped_column(String(16))
+    provider: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(128))
+    prompt_version: Mapped[str] = mapped_column(String(32))
+    context_digest: Mapped[str] = mapped_column(CHAR(64))
+    context_refs_json: Mapped[dict] = mapped_column(JSONB)
+    estimated_input_tokens: Mapped[int] = mapped_column(Integer)
+    count_is_exact: Mapped[bool] = mapped_column(Boolean)
+    max_output_tokens: Mapped[int] = mapped_column(Integer)
+    reserved_tokens: Mapped[int] = mapped_column(BigInteger)
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    billable_tokens: Mapped[int | None] = mapped_column(BigInteger)
+    usage_json: Mapped[dict | None] = mapped_column(JSONB)
+    pricing_snapshot_json: Mapped[dict | None] = mapped_column(JSONB)
+    estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(18, 8))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    dispatch_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ConversationMessage(Base):
