@@ -33,3 +33,6 @@ test-results/
 *.log
 backups/
 *.dump
+
+# Local performance and evaluation reports
+backend/reports/
