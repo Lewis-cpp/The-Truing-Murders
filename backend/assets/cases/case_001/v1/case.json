@@ -1,0 +1,863 @@
+{
+  "schema_version": 3,
+  "scope": "full_case",
+  "case_id": "case_001",
+  "version": "3-full",
+  "rules_version": "full-1",
+  "title": "停电之夜",
+  "synopsis": "研究所停电之夜，负责人陆衡死在档案室。查明凶手、凶器、动机与作案经过。",
+  "introduction": "澄明研究所，案发当晚。21:25，负责人陆衡被发现死在档案室。走廊曾短暂停电，档案柜敞开。四名相关人员仍在所内：副研究员沈砚、档案管理员许岚、值班工程师周启、研究助理林澄。你受托核对现场记录，查明凶手、凶器、动机与作案经过。",
+  "review_status": "pending_human_review",
+  "timeline_origin_label": "案发当日 00:00",
+  "show_key_badges": false,
+  "characters": [
+    {
+      "id": "NPC01",
+      "name": "沈砚",
+      "role": "副研究员",
+      "public_identity": "副研究员，陆衡的下属，负责 B17 实验组。",
+      "personality": "谨慎、要面子，习惯用专业术语掩饰紧张。",
+      "speech_style": "措辞克制，句子短，常说“我需要核对一下”。",
+      "interrogatable": true,
+      "initial_pressure": 20,
+      "initial_trust": 40,
+      "core_lie_ids": ["L01", "L02"],
+      "default_reply": null
+    },
+    {
+      "id": "NPC02",
+      "name": "许岚",
+      "role": "档案管理员",
+      "public_identity": "档案管理员，负责档案借阅与登记。",
+      "personality": "守规矩但怕担责，容易自责。",
+      "speech_style": "说话客气，喜欢解释流程。",
+      "interrogatable": true,
+      "initial_pressure": 10,
+      "initial_trust": 35,
+      "core_lie_ids": ["L03"],
+      "default_reply": null
+    },
+    {
+      "id": "NPC03",
+      "name": "周启",
+      "role": "值班工程师",
+      "public_identity": "值班工程师，负责夜间供电与设备检修。",
+      "personality": "直爽、急躁，不愿承认自己出错。",
+      "speech_style": "口语化，常用“我跟你说”。",
+      "interrogatable": true,
+      "initial_pressure": 15,
+      "initial_trust": 40,
+      "core_lie_ids": ["L04"],
+      "default_reply": null
+    },
+    {
+      "id": "NPC04",
+      "name": "林澄",
+      "role": "研究助理",
+      "public_identity": "研究助理，与沈砚同在 B17 实验组。",
+      "personality": "认真、敏感，对数据较真。",
+      "speech_style": "说话轻，喜欢给出数字和细节。",
+      "interrogatable": true,
+      "initial_pressure": 10,
+      "initial_trust": 50,
+      "core_lie_ids": [],
+      "default_reply": "我只能说明已核对的记录。"
+    },
+    {
+      "id": "VICTIM",
+      "name": "陆衡",
+      "role": "研究所负责人",
+      "public_identity": "澄明研究所负责人，案发当晚在档案室遇害。",
+      "personality": null,
+      "speech_style": null,
+      "interrogatable": false,
+      "initial_pressure": null,
+      "initial_trust": null,
+      "core_lie_ids": [],
+      "default_reply": null
+    }
+  ],
+  "scenes": [
+    {
+      "id": "S01",
+      "name": "档案室",
+      "description": "桌面散着纸页，一枚铜镇纸留在地毯上。门旁的备用终端仍亮着，封存卷宗等待核对，侧门贴着封条。",
+      "unlock": { "all_of": [], "any_of": [] },
+      "actions": [
+        {
+          "id": "A01",
+          "label": "查看备用门禁终端",
+          "evidence_id": "E01",
+          "requires": { "all_of": [], "any_of": [] }
+        },
+        {
+          "id": "A02",
+          "label": "检查桌边与现场检验袋",
+          "evidence_id": "E02",
+          "requires": { "all_of": [], "any_of": [] }
+        },
+        {
+          "id": "A03",
+          "label": "核对封存卷宗",
+          "evidence_id": "E03",
+          "requires": { "all_of": ["E01", "E02"], "any_of": [] }
+        },
+        {
+          "id": "A04",
+          "label": "查看侧门与窗户",
+          "evidence_id": "E04",
+          "requires": { "all_of": [], "any_of": [] }
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "name": "资料室",
+      "description": "借阅柜台上摊着借阅簿，角落的复印机还在待机。",
+      "unlock": { "all_of": [], "any_of": ["E01", "E02"] },
+      "actions": [
+        {
+          "id": "A05",
+          "label": "翻阅借阅簿",
+          "evidence_id": "E05",
+          "requires": { "all_of": [], "any_of": [] }
+        },
+        {
+          "id": "A06",
+          "label": "核对复印任务",
+          "evidence_id": "E06",
+          "requires": { "all_of": ["E05"], "any_of": [] }
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "name": "数据间",
+      "description": "机柜的指示灯一排排闪着，备份服务器旁的工位上放着几本草稿。",
+      "unlock": { "all_of": ["E03"], "any_of": [] },
+      "actions": [
+        {
+          "id": "A07",
+          "label": "查看备份索引",
+          "evidence_id": "E07",
+          "requires": { "all_of": [], "any_of": [] }
+        },
+        {
+          "id": "A08",
+          "label": "校验签名快照",
+          "evidence_id": "E08",
+          "requires": { "all_of": ["E06", "E07"], "any_of": [] }
+        },
+        {
+          "id": "A09",
+          "label": "查看工位草稿",
+          "evidence_id": "E09",
+          "requires": { "all_of": ["E07"], "any_of": [] }
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "name": "配电值班室",
+      "description": "配电面板旁挂着工单夹，值班电话的记录仪还亮着。",
+      "unlock": { "all_of": [], "any_of": ["E01", "E05"] },
+      "actions": [
+        {
+          "id": "A10",
+          "label": "查阅检修工单",
+          "evidence_id": "E10",
+          "requires": { "all_of": [], "any_of": [] }
+        },
+        {
+          "id": "A11",
+          "label": "核对电源与校时记录",
+          "evidence_id": "E11",
+          "requires": { "all_of": ["E01", "E10"], "any_of": [] }
+        },
+        {
+          "id": "A12",
+          "label": "调取值班通话记录",
+          "evidence_id": "E12",
+          "requires": { "all_of": ["E10"], "any_of": [] }
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E01",
+      "title": "备用门禁记录",
+      "kind": "DIGITAL",
+      "content": "独立电池供电的终端保留了21:10沈砚进入、21:16离开档案室的刷卡与人脸核验记录。20:55至21:25，除室内的陆衡外没有其他人进出。现场人员已比对身份、终端校时记录和备用供电状态；记录证明到场，不单独证明杀人。",
+      "source": "档案室备用终端与现场核验单",
+      "credibility": "VERIFIED",
+      "is_key": true
+    },
+    {
+      "id": "E02",
+      "title": "铜镇纸与现场检验单",
+      "kind": "PHYSICAL",
+      "content": "铜镇纸的打击面残留陆衡的血迹，形状与致命伤吻合；握持面的新鲜血印与沈砚指纹匹配。桌角还发现沾血的撕裂手套片。检验单明确这些是本次现场检验的结论，不能仅凭一枚日常指纹认定行凶。",
+      "source": "现场物证袋与签名检验单",
+      "credibility": "VERIFIED",
+      "is_key": true
+    },
+    {
+      "id": "E03",
+      "title": "审计移交联与翻柜痕迹",
+      "kind": "DOCUMENT",
+      "content": "按门禁时段与物证编号核对后，卷宗显示：陆衡20:55签署移交单，次日上午将提交沈砚负责的B17实验原始记录，追查数据造假。柜中只缺B17原件，现金和其他卷宗未动；这份缺失清单是本次核对才确定的，此前没有对外公布。抽屉内侧及B17纸套上的同源血迹说明翻找发生在陆衡受伤之后。封存的移交联副本未被取走。",
+      "source": "封存卷宗、签名移交联副本和现场痕迹核对单",
+      "credibility": "VERIFIED",
+      "is_key": true
+    },
+    {
+      "id": "E04",
+      "title": "侧门封条勘验",
+      "kind": "PHYSICAL",
+      "content": "档案室侧门的封条20:00由保卫处贴封，发现现场时完整无破损，封条签名与登记一致；窗户护栏焊接完好，没有撬动痕迹。案发时段正门是唯一可用的出入口。",
+      "source": "侧门封条与保卫处封存登记",
+      "credibility": "VERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E05",
+      "title": "借阅簿",
+      "kind": "DOCUMENT",
+      "content": "借阅簿19:20一栏写着“B17实验记录（复印用）——林澄”，经办人签名为许岚，未附负责人审批单。按规定B17原始记录不得外借复印。",
+      "source": "资料室借阅簿",
+      "credibility": "VERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E06",
+      "title": "复印任务回执",
+      "kind": "DOCUMENT",
+      "content": "资料室复印机的任务日志显示，19:24以林澄的工卡复印B17批号记录共42页，生成副本编号B17-C1。",
+      "source": "复印机任务日志与回执",
+      "credibility": "VERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E07",
+      "title": "备份队列索引",
+      "kind": "DIGITAL",
+      "content": "数据间备份系统中有一个20:40创建的不可覆盖批次，创建者为林澄，索引指向B17原始数据的签名快照和副本B17-C1的扫描件。索引本身不含实验原文。",
+      "source": "数据间备份服务器索引",
+      "credibility": "VERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E08",
+      "title": "签名实验快照",
+      "kind": "DIGITAL",
+      "content": "20:40批次中的签名快照经校验未被修改。与副本B17-C1逐页比对后，原始读数与沈砚提交给所里的B17报表在关键批次上不一致，报表数值被系统性抬高。档案柜中缺失的正是这份原始记录的纸质原件。",
+      "source": "签名快照与校验报告",
+      "credibility": "VERIFIED",
+      "is_key": true
+    },
+    {
+      "id": "E09",
+      "title": "林澄的比对草稿",
+      "kind": "DOCUMENT",
+      "content": "林澄手写的比对草稿列出B17三个批次的差异，旁注“周四交给陆所长？”。草稿说明她保存副本是为了核对数据，但这只是她本人的陈述，未经独立核验。",
+      "source": "林澄工位上的草稿本",
+      "credibility": "UNVERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E10",
+      "title": "检修工单",
+      "kind": "DOCUMENT",
+      "content": "工单W-0412由周启21:05签字，记录“走廊回路手动切换检修”，审批栏空白。按规程，夜间切换回路必须先报值班主任批准。",
+      "source": "配电值班室工单夹",
+      "credibility": "VERIFIED",
+      "is_key": false
+    },
+    {
+      "id": "E11",
+      "title": "电源与校时记录",
+      "kind": "DIGITAL",
+      "content": "配电系统日志显示走廊回路21:08被手动断开、21:18恢复，不是过载跳闸。档案室备用门禁由独立电池供电，同期时钟连续、未断电，校时偏差小于1秒，门禁记录的21:10与21:16可信。停电没有经过档案室内的任何设备触发。",
+      "source": "配电日志与门禁校时报告",
+      "credibility": "VERIFIED",
+      "is_key": true
+    },
+    {
+      "id": "E12",
+      "title": "值班通话记录",
+      "kind": "DIGITAL",
+      "content": "值班电话21:25接到许岚报告陆衡倒在档案室，21:27保卫处封锁现场。21:00至21:25之间值班台没有接到其他报修或求助电话。",
+      "source": "值班台通话记录",
+      "credibility": "VERIFIED",
+      "is_key": false
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "K01",
+      "content": "沈砚负责B17实验组，平时有权限进入档案室。",
+      "known_by": ["NPC01", "NPC02", "NPC03", "NPC04"],
+      "disclosure": "PUBLIC"
+    },
+    {
+      "id": "K02",
+      "content": "沈砚承认21:10至21:16进入过档案室；此条只记录到场证词，不是杀人招供。",
+      "known_by": ["NPC01"],
+      "disclosure": "ADMITTED"
+    },
+    {
+      "id": "K03",
+      "content": "沈砚断言档案室丢的是B17原件：“柜子翻成那样，B17的原件肯定是被偷了。”此条只记录他的说法。",
+      "known_by": ["NPC01"],
+      "disclosure": "ASKED"
+    },
+    {
+      "id": "K04",
+      "content": "沈砚承认因担心B17数据造假被审计，用铜镇纸袭击陆衡，随后取走B17原件并翻乱档案柜。此条是他的供述，仍需证据印证。",
+      "known_by": ["NPC01"],
+      "disclosure": "ADMITTED"
+    },
+    {
+      "id": "K05",
+      "content": "许岚承认19:20未经审批让林澄复印B17记录，因为害怕处分才否认。",
+      "known_by": ["NPC02", "NPC04"],
+      "disclosure": "ADMITTED"
+    },
+    {
+      "id": "K06",
+      "content": "周启承认21:08违规手动切换走廊回路造成停电，21:18恢复；他称自己一直在值班室，没有见到行凶。",
+      "known_by": ["NPC03"],
+      "disclosure": "ADMITTED"
+    },
+    {
+      "id": "K07",
+      "content": "许岚说：“21:25我去档案室归还借阅簿，看见陆所长倒在桌边，就马上打给值班台。”",
+      "known_by": ["NPC02"],
+      "disclosure": "ASKED"
+    },
+    {
+      "id": "K08",
+      "content": "周启说：“走廊是线路自动跳闸，我在值班室盯着面板，十分钟后就恢复了。”",
+      "known_by": ["NPC03"],
+      "disclosure": "ASKED"
+    },
+    {
+      "id": "K09",
+      "content": "林澄说：“我只是按流程做备份，没有复制过不该复制的东西。”",
+      "known_by": ["NPC04"],
+      "disclosure": "ASKED"
+    },
+    {
+      "id": "K10",
+      "content": "林澄说：“沈老师这周一直很紧张，周三还问我审计会抽查哪些批次。”",
+      "known_by": ["NPC04"],
+      "disclosure": "ASKED"
+    },
+    {
+      "id": "K11",
+      "content": "陆衡是澄明研究所负责人，案发当晚独自在档案室核对卷宗。",
+      "known_by": ["NPC01", "NPC02", "NPC03", "NPC04"],
+      "disclosure": "PUBLIC"
+    }
+  ],
+  "lies": [
+    {
+      "id": "L01",
+      "npc_id": "NPC01",
+      "counterevidence": { "all_of": ["E01"], "any_of": [] },
+      "admission_presented": { "all_of": ["E01", "E03"], "any_of": [] },
+      "admission_pressure_min": 65,
+      "admission_trust_min": null,
+      "statements": {
+        "unbroken": "停电时我一直在休息区，没有去过档案室。",
+        "broken": "这份记录和我的说法对不上。我现在不想解释那几分钟。",
+        "admitted": "我承认21:10到21:16在档案室。关于其他事情，我暂时不作解释。"
+      },
+      "admitted_knowledge_id": "K02",
+      "effects": [
+        { "evidence_id": "E01", "pressure": 25, "trust": -5 },
+        { "evidence_id": "E03", "pressure": 25, "trust": 0 }
+      ]
+    },
+    {
+      "id": "L02",
+      "npc_id": "NPC01",
+      "counterevidence": { "all_of": ["E02", "E08"], "any_of": [] },
+      "admission_presented": { "all_of": ["E02", "E08"], "any_of": [] },
+      "admission_pressure_min": 85,
+      "admission_trust_min": null,
+      "statements": {
+        "unbroken": "我只承认去过；其余事情暂不解释。",
+        "broken": "镇纸和这份快照让我无法继续回避，但我还没准备好交代。",
+        "admitted": "我怕B17造假被查，用镇纸打了陆衡，随后拿走原件，把柜子翻乱。"
+      },
+      "admitted_knowledge_id": "K04",
+      "effects": [{ "evidence_id": "E08", "pressure": 20, "trust": 0 }]
+    },
+    {
+      "id": "L03",
+      "npc_id": "NPC02",
+      "counterevidence": { "all_of": ["E05"], "any_of": [] },
+      "admission_presented": { "all_of": ["E05", "E06"], "any_of": [] },
+      "admission_pressure_min": 45,
+      "admission_trust_min": null,
+      "statements": {
+        "unbroken": "我没有把B17材料借给别人。",
+        "broken": "借阅簿上的字确实像我的，我还需要核对。",
+        "admitted": "是我让林澄复印的。我怕被处分，所以没有说实话。"
+      },
+      "admitted_knowledge_id": "K05",
+      "effects": [
+        { "evidence_id": "E05", "pressure": 20, "trust": 0 },
+        { "evidence_id": "E06", "pressure": 20, "trust": 0 }
+      ]
+    },
+    {
+      "id": "L04",
+      "npc_id": "NPC03",
+      "counterevidence": { "all_of": ["E10"], "any_of": [] },
+      "admission_presented": { "all_of": ["E10", "E11"], "any_of": [] },
+      "admission_pressure_min": 60,
+      "admission_trust_min": null,
+      "statements": {
+        "unbroken": "走廊是自动跳闸，我没有动过回路。",
+        "broken": "工单和我的说法有矛盾，我现在不想解释。",
+        "admitted": "是我违规切换了回路，造成停电。我没有见到行凶。"
+      },
+      "admitted_knowledge_id": "K06",
+      "effects": [
+        { "evidence_id": "E10", "pressure": 25, "trust": 0 },
+        { "evidence_id": "E11", "pressure": 25, "trust": 0 }
+      ]
+    }
+  ],
+  "lie_chains": [
+    { "id": "CH01", "npc_id": "NPC01", "lie_ids": ["L01", "L02"] },
+    { "id": "CH02", "npc_id": "NPC02", "lie_ids": ["L03"] },
+    { "id": "CH03", "npc_id": "NPC03", "lie_ids": ["L04"] }
+  ],
+  "interrogation": {
+    "irrelevant_trust": -5,
+    "evade_after": 2,
+    "irrelevant_reply": "你到底想说什么？这和我有什么关系？",
+    "evade_reply": "你一直拿不相干的东西来问我。我现在不想再谈了。",
+    "topics": [
+      {
+        "id": "Q01",
+        "npc_id": "NPC01",
+        "label": "档案室丢了什么？",
+        "reply": "柜子翻成那样，B17的原件肯定是被偷了。",
+        "knowledge_id": "K03"
+      },
+      {
+        "id": "Q02",
+        "npc_id": "NPC02",
+        "label": "你是怎么发现陆所长的？",
+        "reply": "21:25我去档案室归还借阅簿，看见陆所长倒在桌边，就马上打给值班台。",
+        "knowledge_id": "K07"
+      },
+      {
+        "id": "Q03",
+        "npc_id": "NPC03",
+        "label": "停电是怎么回事？",
+        "reply": "走廊是线路自动跳闸，我在值班室盯着面板，十分钟后就恢复了。",
+        "knowledge_id": "K08"
+      },
+      {
+        "id": "Q04",
+        "npc_id": "NPC04",
+        "label": "你复制过 B17 的数据吗？",
+        "reply": "我只是按流程做备份，没有复制过不该复制的东西。",
+        "knowledge_id": "K09"
+      },
+      {
+        "id": "Q05",
+        "npc_id": "NPC04",
+        "label": "沈砚最近有什么异常？",
+        "reply": "沈老师这周一直很紧张，周三还问我审计会抽查哪些批次。",
+        "knowledge_id": "K10"
+      }
+    ],
+    "contradictions": [
+      {
+        "id": "C01",
+        "npc_id": "NPC01",
+        "knowledge_id": "K03",
+        "evidence_id": "E03",
+        "pressure": 15,
+        "trust": 0,
+        "reply": "……我是猜的。柜子都被翻开了，丢的总归是要紧的东西。",
+        "explanation": "缺失清单是核对封存卷宗后才确定的，此前没有对外公布；沈砚却已经说出丢的是B17原件。"
+      },
+      {
+        "id": "C02",
+        "npc_id": "NPC03",
+        "knowledge_id": "K08",
+        "evidence_id": "E10",
+        "pressure": 10,
+        "trust": 0,
+        "reply": "……工单是我签的，那只是例行检查。",
+        "explanation": "检修工单显示周启21:05签字执行了未获批准的手动切换，与他“线路自动跳闸”的说法不符。"
+      },
+      {
+        "id": "C03",
+        "npc_id": "NPC04",
+        "knowledge_id": "K09",
+        "evidence_id": "E06",
+        "pressure": 10,
+        "trust": 0,
+        "reply": "……那份副本是许老师同意的，我只是想核对数据。",
+        "explanation": "复印回执显示林澄19:24用自己的工卡复印了42页B17记录，与她“没有复制过”的说法不符。"
+      }
+    ]
+  },
+  "deep_unlock": { "all_of": ["E03"], "any_of": [] },
+  "relationships": [
+    {
+      "id": "R01",
+      "from_id": "NPC01",
+      "to_id": "VICTIM",
+      "type": "下属",
+      "directed": true,
+      "description": "沈砚是陆衡的下属，负责B17实验组。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "PUBLIC",
+      "source_id": null,
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R02",
+      "from_id": "NPC02",
+      "to_id": "VICTIM",
+      "type": "下属",
+      "directed": true,
+      "description": "许岚负责档案借阅登记，向陆衡汇报。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "PUBLIC",
+      "source_id": null,
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R03",
+      "from_id": "NPC03",
+      "to_id": "VICTIM",
+      "type": "下属",
+      "directed": true,
+      "description": "周启是研究所的值班工程师，归陆衡管理。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "PUBLIC",
+      "source_id": null,
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R04",
+      "from_id": "NPC04",
+      "to_id": "NPC01",
+      "type": "同组同事",
+      "directed": false,
+      "description": "林澄是沈砚所在B17实验组的研究助理。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "PUBLIC",
+      "source_id": null,
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R05",
+      "from_id": "VICTIM",
+      "to_id": "NPC01",
+      "type": "审计移交",
+      "directed": true,
+      "description": "陆衡签署移交单，准备次日把沈砚负责的B17原始记录交审计。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E03",
+      "reveal_evidence_ids": ["E03"],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R06",
+      "from_id": "NPC02",
+      "to_id": "NPC04",
+      "type": "违规出借",
+      "directed": true,
+      "description": "借阅簿登记许岚把B17记录借给林澄复印。",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E05",
+      "reveal_evidence_ids": ["E05"],
+      "reveal_knowledge_ids": []
+    },
+    {
+      "id": "R07",
+      "from_id": "NPC04",
+      "to_id": "NPC01",
+      "type": "数据质疑",
+      "directed": true,
+      "description": "林澄的草稿记录她发现沈砚的B17报表与原始数据不一致。",
+      "assertion_kind": "TESTIMONY",
+      "credibility": "UNVERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E09",
+      "reveal_evidence_ids": ["E09"],
+      "reveal_knowledge_ids": []
+    }
+  ],
+  "timeline": [
+    {
+      "id": "T01",
+      "title": "许岚登记出借B17记录",
+      "description": "借阅簿登记19:20把B17记录借给林澄复印。",
+      "scene_id": "S02",
+      "participant_ids": ["NPC02", "NPC04"],
+      "precision": "EXACT",
+      "start_minutes": 1160,
+      "end_minutes": 1160,
+      "time_label": "19:20",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E05",
+      "reveal_evidence_ids": ["E05"],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": []
+    },
+    {
+      "id": "T02",
+      "title": "签名快照入库",
+      "description": "林澄创建20:40不可覆盖备份批次。",
+      "scene_id": "S03",
+      "participant_ids": ["NPC04"],
+      "precision": "EXACT",
+      "start_minutes": 1240,
+      "end_minutes": 1240,
+      "time_label": "20:40",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E07",
+      "reveal_evidence_ids": ["E07"],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": []
+    },
+    {
+      "id": "T03",
+      "title": "陆衡签署审计移交单",
+      "description": "移交单约定次日上午提交B17原始记录。",
+      "scene_id": "S01",
+      "participant_ids": ["VICTIM"],
+      "precision": "EXACT",
+      "start_minutes": 1255,
+      "end_minutes": 1255,
+      "time_label": "20:55",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E03",
+      "reveal_evidence_ids": ["E03"],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": []
+    },
+    {
+      "id": "T04",
+      "title": "走廊回路被手动断开",
+      "description": "配电日志记录走廊回路21:08手动断开，21:18恢复。",
+      "scene_id": null,
+      "participant_ids": [],
+      "precision": "RANGE",
+      "start_minutes": 1268,
+      "end_minutes": 1278,
+      "time_label": "21:08—21:18",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E11",
+      "reveal_evidence_ids": ["E11"],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": ["T05"]
+    },
+    {
+      "id": "T05",
+      "title": "周启称线路自动跳闸",
+      "description": "周启说走廊是自动跳闸，十分钟后恢复。",
+      "scene_id": null,
+      "participant_ids": ["NPC03"],
+      "precision": "RANGE",
+      "start_minutes": 1268,
+      "end_minutes": 1278,
+      "time_label": "停电期间（周启的说法）",
+      "assertion_kind": "TESTIMONY",
+      "credibility": "UNVERIFIED",
+      "source_kind": "NPC",
+      "source_id": "NPC03",
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": ["K08"],
+      "conflicts_with": ["T04"]
+    },
+    {
+      "id": "T06",
+      "title": "沈砚进出档案室",
+      "description": "备用门禁记录沈砚21:10进入、21:16离开。",
+      "scene_id": "S01",
+      "participant_ids": ["NPC01"],
+      "precision": "RANGE",
+      "start_minutes": 1270,
+      "end_minutes": 1276,
+      "time_label": "21:10—21:16",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "EVIDENCE",
+      "source_id": "E01",
+      "reveal_evidence_ids": ["E01"],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": []
+    },
+    {
+      "id": "T07",
+      "title": "沈砚供述袭击陆衡",
+      "description": "沈砚承认在档案室用镇纸袭击陆衡，未说明具体分钟。",
+      "scene_id": "S01",
+      "participant_ids": ["NPC01", "VICTIM"],
+      "precision": "UNKNOWN",
+      "start_minutes": null,
+      "end_minutes": null,
+      "time_label": "门禁记录时段内，具体时间未知",
+      "assertion_kind": "TESTIMONY",
+      "credibility": "UNVERIFIED",
+      "source_kind": "NPC",
+      "source_id": "NPC01",
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": ["K04"],
+      "conflicts_with": []
+    },
+    {
+      "id": "T08",
+      "title": "许岚发现陆衡并报警",
+      "description": "21:25陆衡被发现倒在档案室，值班台随即接到报告。",
+      "scene_id": "S01",
+      "participant_ids": ["NPC02", "VICTIM"],
+      "precision": "EXACT",
+      "start_minutes": 1285,
+      "end_minutes": 1285,
+      "time_label": "21:25",
+      "assertion_kind": "FACT",
+      "credibility": "VERIFIED",
+      "source_kind": "PUBLIC",
+      "source_id": null,
+      "reveal_evidence_ids": [],
+      "reveal_knowledge_ids": [],
+      "conflicts_with": []
+    }
+  ],
+  "suspects": [
+    { "id": "NPC01", "label": "沈砚 · 副研究员" },
+    { "id": "NPC02", "label": "许岚 · 档案管理员" },
+    { "id": "NPC03", "label": "周启 · 值班工程师" },
+    { "id": "NPC04", "label": "林澄 · 研究助理" }
+  ],
+  "weapons": [
+    { "id": "W01", "label": "铜镇纸" },
+    { "id": "W02", "label": "裁纸刀" },
+    { "id": "W03", "label": "电缆" }
+  ],
+  "motives": [
+    { "id": "M01", "label": "阻止实验造假被移交审计" },
+    { "id": "M02", "label": "掩盖私借B17副本被发现" },
+    { "id": "M03", "label": "掩盖违规检修造成的事故" }
+  ],
+  "process_steps": [
+    { "id": "P_ATTACK", "label": "用铜镇纸袭击陆衡" },
+    { "id": "P_CUT_POWER", "label": "故意切断电源制造黑暗" },
+    { "id": "P_STAGE", "label": "取走原始记录并翻乱档案柜伪装失窃" },
+    { "id": "P_ENTER", "label": "停电期间进入档案室" },
+    { "id": "P_SEARCH_FIRST", "label": "先翻柜找记录，被陆衡撞见后行凶" }
+  ],
+  "truth": {
+    "culprit": "NPC01",
+    "weapon": "W01",
+    "motive": "M01",
+    "steps": ["P_ENTER", "P_ATTACK", "P_STAGE"],
+    "explanation": "沈砚为阻止B17实验造假被移交审计，利用周启违规检修造成的走廊停电，于21:10进入档案室。21:12，他用桌上的铜镇纸袭击陆衡；随后取走B17原始记录、翻乱档案柜伪装失窃，21:16离开。门禁记录与独立校时限制了到场人选，镇纸上的新鲜血印联系了行凶者与凶器，移交联、签名快照和伤后翻柜痕迹说明动机与善后顺序。停电是周启违规手动切换回路造成的，并非沈砚制造；许岚隐瞒了私借档案，林澄保存了未经许可的实验副本，三人均未行凶。"
+  },
+  "scoring": {
+    "correct_min": 85,
+    "partial_min": 30,
+    "wrong_culprit_is_wrong": true,
+    "process_order": "exact",
+    "criteria": [
+      {
+        "id": "C_CULPRIT",
+        "label": "凶手",
+        "kind": "culprit",
+        "points": 30,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "行凶者为沈砚；选错凶手时总类别直接判错。"
+      },
+      {
+        "id": "C_WEAPON",
+        "label": "凶器",
+        "kind": "weapon",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "致命伤对应铜镇纸。"
+      },
+      {
+        "id": "C_MOTIVE",
+        "label": "动机",
+        "kind": "motive",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "沈砚试图阻止实验造假进入审计。"
+      },
+      {
+        "id": "C_PROCESS",
+        "label": "过程顺序",
+        "kind": "process",
+        "points": 15,
+        "step_id": null,
+        "evidence_ids": [],
+        "explanation": "必须恰好按进入、袭击、伪装失窃的顺序选择步骤，不能加入干扰步骤。"
+      },
+      {
+        "id": "C_ENTRY",
+        "label": "到场依据",
+        "kind": "support",
+        "points": 10,
+        "step_id": "P_ENTER",
+        "evidence_ids": ["E01", "E11"],
+        "explanation": "进入步骤必须同时关联E01备用门禁记录和E11独立校时记录。"
+      },
+      {
+        "id": "C_ATTACK",
+        "label": "袭击依据",
+        "kind": "support",
+        "points": 10,
+        "step_id": "P_ATTACK",
+        "evidence_ids": ["E02"],
+        "explanation": "袭击步骤必须关联E02镇纸与现场检验单。"
+      },
+      {
+        "id": "C_STAGE",
+        "label": "善后依据",
+        "kind": "support",
+        "points": 5,
+        "step_id": "P_STAGE",
+        "evidence_ids": ["E03", "E08"],
+        "explanation": "伪装步骤必须同时关联E03移交联与翻柜痕迹、E08签名快照。"
+      }
+    ]
+  }
+}

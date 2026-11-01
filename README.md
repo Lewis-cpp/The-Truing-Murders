@@ -340,4 +340,5 @@ uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
 - [测试架构与矩阵](docs/14-testing.md)
 - [后端目录与开发边界](docs/15-development-plan.md)
 - [开发路线图（一人开发）](docs/16-development-roadmap.html)
+- [分阶段实现规格（v0.3～v1.0）](docs/specs/README.md)
 - [技术栈概览](tech-stack.html)
