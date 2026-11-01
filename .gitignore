@@ -36,3 +36,4 @@ backups/
 
 # Local performance and evaluation reports
 backend/reports/
+backend/deploy/.env
