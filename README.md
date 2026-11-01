@@ -5,22 +5,24 @@
 
 ## 当前状态
 
-v0.2 把《停电之夜》切片变成了可保存的网页游戏：浏览器开局 → 调查取证 → 审讯并出示证据 →
-刷新或重启后端后继续 → 正式指控 → 固定复盘。所有规则和对白仍是固定内容，
-没有 Agent、模型 SDK 或模型调用。进度保存在 PostgreSQL，每次操作在一个事务内提交，
-数据库失败时页面不会显示保存成功。重开会创建独立的新局，旧局保留为只读。
-交付范围与限制见 [v0.2 交付记录](docs/18-v0.2-delivery.md)。
+v0.3 接入《停电之夜》全案：4 场景按证据逐步开放、4 名可审讯人物、12 条证据、
+沈砚的两层谎言链，浏览器开局 → 四场景取证 → 进入深入调查 → 审讯并出示证据
+（击破但未承认、两层承认）→ 保存指控草稿并返回调查 → 正式指控 → 固定复盘。
+**不触发任何承认也能得 100 分**。所有规则和对白仍是固定内容，没有 Agent、模型 SDK 或模型调用。
+进度保存在 PostgreSQL，每次操作在一个事务内提交，数据库失败时页面不会显示保存成功；
+人物关系图与时间线只显示已确认条目，刷新或重启后端后继续。
+交付范围与限制见 [v0.3 交付记录](docs/19-v0.3-delivery.md)。
 
-切片 `2-slice` 让审讯需要判断：追问预设话题会把回答记为未核验证词，可以用证词和证据指出矛盾；
-出示与当前谎言无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
-是否成立都由规则表判定，界面不显示压力和信任数值。指控候选也换成了更像真相的干扰项。
+审讯规则与 v0.2 切片一致：追问预设话题记为未核验证词，可以用证词和证据指出矛盾；
+出示与当前谎言层无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
+同一人物的多层谎言按链推进：击破下一层之前必须先承认上一层；界面不显示压力和信任数值。
+无谎言链的角色（林澄）对任何出示都按无关处理。指控草稿可在指控阶段保存，
+退出后保留，正式提交时被本次内容替换并冻结。
 
-W1 的离线命令行切片继续保留：1 场景、1 NPC、3 条证据、1 条单层谎言、结构化指控、
-三类判定与固定复盘，进度只在内存，不需要数据库。
-
-同案的 [完整案件草稿](backend/assets/cases/case_001/v1/full-case-draft.md) 已列出真相、知识权限、
-4 NPC／4 场景／12 条证据／3 条谎言链与评分；全案尚未实现，细节待人工审阅。
-可执行配置为 [W1 案件切片](backend/assets/cases/case_001/v1/slice.json)。
+v0.2 的 [W1 案件切片](docs/18-v0.2-delivery.md) 已退役：`slice.json` 从仓库删除，
+已发布的 `2-slice` 版本行与旧存档保留在数据库中但不可继续（`SAVE_VERSION_UNSUPPORTED`）。
+离线命令行现在直接游玩全案（进度只在内存，不需要数据库）。
+可执行配置为 [全案案件文件](backend/assets/cases/case_001/v1/case.json)（人工预期，待真人审阅）。
 
 网页链路：Vue 页面 → Vite 同源代理 → FastAPI `/api/v1` → PostgreSQL 18。
 
@@ -28,7 +30,7 @@ W1 的离线命令行切片继续保留：1 场景、1 NPC、3 条证据、1 条
 各自带依赖、锁文件和命令，以下命令均在对应子目录内执行。项目按一人独立开发安排，
 排期见 [开发路线图](docs/16-development-roadmap.html)。
 
-## 先玩第一周切片
+## 先玩全案命令行
 
 首次准备 Python 依赖，然后启动。CLI 不需要 `.env`、数据库、Node.js 或模型密钥。
 首次安装可能下载依赖；安装完成后，运行和 W1 测试均可离线进行。
@@ -39,8 +41,8 @@ uv sync --locked
 uv run --offline truing-play
 ```
 
-进入游戏后输入 `look` 看调查点，`help` 看操作。以下是一条调查与审讯路径，
-你也可以先调查 A02，或完全跳过审讯后指控：
+进入游戏后输入 `look` 查看已开放场景与调查点，`help` 看操作。以下是一条 minimal 路径，
+你也可以先集齐证据再审讯，或完全跳过审讯后指控：
 
 ```text
 look
@@ -81,10 +83,9 @@ uv run --offline ruff check src tests
 uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 ```
 
-静态评分样例在 `backend/tests/data/expected/week_one_verdicts.json`，与被测评分函数独立编写；
-覆盖三结局、75分无证据猜测、30／85分边界、错误凶手覆盖高分。
-另检查取证依赖、阻断循环、数值上下界、六种出示顺序、知识投影、重复收益、
-非法动作、结案冻结和实际终端交互。CLI 交互测试禁止套接字连接。
+全案的人工评分与路径预期在 `backend/tests/data/expected/full_case_verdicts.json` 和
+`full_case_paths.json`，与被测规则函数独立编写；覆盖三结局、无招供 100 分、两层谎言的
+正序与逆序、无关与回避、话题与矛盾、六阶段动作矩阵和终端交互。CLI 交互测试禁止套接字连接。
 这些预期尚待真人复核，不冒充人工验收结果。
 
 `.github/workflows/ci.yml` 分三个任务：后端离线任务运行 Ruff 和上述离线检查；
@@ -127,7 +128,7 @@ cp .env.example .env
 uv sync --locked
 docker compose up -d --wait
 uv run alembic upgrade head
-uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
+uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 
 cd ../frontend
 npm ci
@@ -163,6 +164,25 @@ npm run dev
 - API 文档：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)。
 - `GET /api/v1/health`：进程存活检查，不依赖数据库。
 - `GET /api/v1/ready`：真实执行数据库查询，成功返回 200，连接失败返回 503。
+
+### v0.3 接口概览
+
+在 v0.2 的会话与审讯接口之上，新增以下只读资源与写接口（均挂在
+`/api/v1/sessions/{session_id}` 下，写接口仍需 `Idempotency-Key` 与
+`X-Expected-State-Version`）：
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/scenes`、`/scenes/{scene_id}` | GET | 已开放场景列表/详情；未开放统一 404 `SCENE_NOT_FOUND` |
+| `/scenes/{scene_id}/investigations` | POST | 指定场景内调查；动作不属于该场景 422 `INVALID_ACTION_REFERENCE` |
+| `/evidence`、`/evidence/{evidence_id}` | GET | 证据背包/详情；未持有与不存在统一 404 |
+| `/npcs`、`/npcs/{npc_id}` | GET | 四名可审讯人物；其余人物不出现 |
+| `/npcs/{npc_id}/conversations` | GET/POST | 固定模式聊天历史（`limit`、`before_seq` 分页）与发起聊天 |
+| `/conversations/{conversation_id}` | GET | 单轮对话（聊天回执的 `Location` 指向它） |
+| `/npcs/{npc_id}/evidence-presentations` | POST | 出示证据，同事务创建一轮对话 |
+| `/relationships`、`/timeline` | GET | 已确认关系图与时间线 |
+| `/accusation-options` | GET | 指控候选（不含答案） |
+| `/accusation-draft` | GET/PUT | 草稿读取与保存（仅指控阶段） |
 
 前端通过 `/api/v1` 代理访问本机 8000 端口，无需配置跨域通配符。
 后端用 HttpOnly 匿名 Cookie 识别访问者，写请求校验 `Origin`（默认允许 5173 和 4173 端口的
@@ -201,9 +221,11 @@ npm run build
 
 后端检查在真实 PostgreSQL 18 上验证：迁移可升级、可回退且与模型一致；复合外键、唯一效果和唯一结案；
 写入证据后注入故障整体回滚；同键重发、同键异载荷、跨访客访问、过期版本和并发提交；
-API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼容旧存档的处理；迁移带数据往返不丢失追问证词。
+API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼容旧存档的处理；
+固定模式对话轮次、分页与幂等；草稿保存、保留与提交冻结；迁移带切片数据升级与空库降级。
 前端检查验证写请求协议、断线后查询原请求、保存失败不显示成功、用同一键重试，
-以及追问、指出矛盾、回避提示和旧存档进入大厅。数据库缺失时集成检查直接失败，不跳过。
+以及全案页面的 `data-testid` 契约、四人物审讯、对话记录、关系与时间线、草稿与复盘。
+数据库缺失时集成检查直接失败，不跳过。
 测试通过 `TEST_DATABASE_URL` 使用独立库，要求数据库名以 `_test` 结尾，且不能与开发库相同；
 测试会重建该库的表结构。
 
@@ -241,15 +263,21 @@ uv run alembic upgrade head
 自动生成的迁移必须检查约束、索引和数据变更，再执行。
 迁移文件保存在 `backend/src/backend/infrastructure/database/migrations/versions/`。
 
-迁移 `0002` 为追问证词和回避增加字段。已有开发库升级后，需要导入新版切片：
+迁移 `0002` 为追问证词和回避增加字段；迁移 `0003` 增加全案需要的静态表与列
+（关系图、时间线、谎言链、人物性格、证据种类与关键标记、场景开放条件）、
+运行表 `conversation` 与 `conversation_message`，并让每个可审讯人物各有一行 `npc_state`。
+已有开发库升级后，需要导入全案案件文件：
 
 ```bash
 uv run alembic upgrade head
-uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
+uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 ```
 
-规则执行版本升为 `w1-slice-2` 后，旧的 `1-slice` 存档原样保留，但不能继续。
+规则执行版本升为 `full-1` 后，旧的 `2-slice` 及更早存档原样保留，但不能继续。
 页面会提示存档无法读取并显示案件列表；玩家确认后，新局取代它成为当前存档。
+注意：`alembic downgrade 0002` 会丢弃全案静态新增列与 `lie_chain`、`relationship`、
+`timeline_event` 三张表（规格只要求空库降级成功）；若在开发库执行过降级再升级，
+需要删除 `case_001` 的 `3-full` 模板行后重新执行上面的导入命令。
 
 ### 常见问题
 
@@ -341,4 +369,5 @@ uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
 - [后端目录与开发边界](docs/15-development-plan.md)
 - [开发路线图（一人开发）](docs/16-development-roadmap.html)
 - [分阶段实现规格（v0.3～v1.0）](docs/specs/README.md)
+- [v0.3 交付记录](docs/19-v0.3-delivery.md)
 - [技术栈概览](tech-stack.html)
