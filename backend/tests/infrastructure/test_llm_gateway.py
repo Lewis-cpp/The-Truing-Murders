@@ -2,14 +2,14 @@
 
 import json
 import time
-from email.utils import format_datetime
 from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 
 import httpx2
 import pytest
+from backend.infrastructure.llm_client import LLMCall, LLMGateway
 
 from backend.config import Settings
-from backend.infrastructure.llm_client import LLMCall, LLMGateway
 
 pytestmark = [pytest.mark.unit, pytest.mark.agent]
 

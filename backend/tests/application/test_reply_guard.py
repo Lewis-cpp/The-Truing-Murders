@@ -1,9 +1,9 @@
 """v0.4 acceptance: the backstop check on model replies (spec section 5)."""
 
 import pytest
+from backend.application.conversation import check_reply, load_guard
 
 from backend.application.case import load_case
-from backend.application.conversation import check_reply, load_guard
 from backend.domain import rules
 from backend.domain.state_machine import transition
 
