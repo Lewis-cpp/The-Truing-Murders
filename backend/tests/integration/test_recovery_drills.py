@@ -54,7 +54,6 @@ def test_a_presentation_failing_after_its_round_is_written_leaves_nothing(client
     tolerant = TestClient(
         client.app, base_url=ORIGIN, headers={"Origin": ORIGIN}, raise_server_exceptions=False
     )
-    tolerant.cookies = client.cookies
     player = Player(client)
     player.start()
     player.investigate_all()
@@ -62,6 +61,9 @@ def test_a_presentation_failing_after_its_round_is_written_leaves_nothing(client
     before = player.load()
     key = uuid.uuid4()
     player.client = tolerant
+    # httpx copies cookie jars on assignment, so the visitor cookie that start()
+    # set must be re-synced after the swap, before the drill sends its request.
+    tolerant.cookies = client.cookies
     with failing_message_inserts(db):
         failed = player.present("E01", key=key)
     assert (failed.status_code, code(failed)) == (503, "PERSISTENCE_UNAVAILABLE")
