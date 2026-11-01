@@ -127,6 +127,7 @@ onUnmounted(() => game.stopPolling())
           <ElButton
             type="danger"
             plain
+            data-testid="open-accusation"
             :disabled="
               game.busy || !game.view.session.available_actions.includes('OPEN_ACCUSATION')
             "
