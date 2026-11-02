@@ -60,13 +60,22 @@ function renderGraph() {
   chart.setOption(graphOption(game.view.relationships))
 }
 
+// A board first mounted hidden (narrow layout, other tab) has no chart yet: create it
+// once the container gets a size instead of only resizing.
 function resizeChart() {
-  chart?.resize()
+  if (chart) chart.resize()
+  else renderGraph()
 }
+
+let observer: ResizeObserver | null = null
 
 onMounted(() => {
   void nextTick(renderGraph)
   window.addEventListener('resize', resizeChart)
+  if (typeof ResizeObserver !== 'undefined' && chartEl.value) {
+    observer = new ResizeObserver(resizeChart)
+    observer.observe(chartEl.value)
+  }
 })
 watch(
   () => game.view?.relationships,
@@ -75,6 +84,7 @@ watch(
 )
 onUnmounted(() => {
   window.removeEventListener('resize', resizeChart)
+  observer?.disconnect()
   chart?.dispose()
   chart = null
 })
