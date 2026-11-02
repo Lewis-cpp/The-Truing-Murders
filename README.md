@@ -5,7 +5,12 @@
 
 ## 当前状态
 
-v0.5 让四个可审讯角色共用同一套模型生成：各自的知识、历史、秘密和承认状态互相隔离，
+v1.0 的规格实现与本地自动化验收已完成，包含全案玩法、关系图与时间线、部署配置、
+响应式布局和可访问性。最新状态见 [实现进度](docs/specs/PROGRESS.md)，
+验证与限制见 [v1.0 交付记录](docs/23-v1.0-delivery.md) 和 [测试报告](docs/test-report.md)。
+真实模型通关与评测、玩家试用和案件预期的真人复核尚未完成。
+
+四个可审讯角色共用同一套模型生成：各自的知识、历史、秘密和承认状态互相隔离，
 长对话、切换角色和重开都不会污染事实；每人的记忆按"授权段"推进——说法、可说知识或出示材料
 变化时，旧段历史退出模型上下文，承认等核心事实每轮由授权内容重建。额度用尽后自动转为固定回复
 （页面提示），调查与结案照常，**不触发任何承认也能得 100 分**。生成默认关闭
@@ -13,7 +18,7 @@ v0.5 让四个可审讯角色共用同一套模型生成：各自的知识、历
 模型输出经服务端检查，没有任何写状态的入口。进度保存在 PostgreSQL，每次操作在一个事务内提交，
 数据库失败时页面不会显示保存成功。待定回复由页面每 1.5 秒轮询，失败降级为固定回复并提示，
 玩家可显式重试（至多两次）。
-交付范围与限制见 [v0.5 交付记录](docs/21-v0.5-delivery.md)，模型配置见下文[启用模型](#启用模型)。
+记忆机制见 [v0.5 交付记录](docs/21-v0.5-delivery.md)，模型配置见下文[启用模型](#启用模型)。
 
 审讯规则与 v0.2 切片一致：追问预设话题记为未核验证词，可以用证词和证据指出矛盾；
 出示与当前谎言层无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
@@ -90,10 +95,10 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 正序与逆序、无关与回避、话题与矛盾、六阶段动作矩阵和终端交互。CLI 交互测试禁止套接字连接。
 这些预期尚待真人复核，不冒充人工验收结果。
 
-`.github/workflows/ci.yml` 分三个任务：后端离线任务运行 Ruff 和上述离线检查；
+`.github/workflows/ci.yml` 分四个任务：后端离线任务运行 Ruff 和上述离线检查；
 数据库任务启动与 `compose.yaml` 同一摘要的 PostgreSQL 18 服务，运行完整 pytest；
-前端运行格式、类型、lint、测试和构建。CI 不使用模型密钥。
-交付范围与验证记录见 [W1 交付记录](docs/17-week-one-delivery.md)。
+前端运行格式、类型、lint、测试和构建；E2E 任务构建前端并用真实浏览器验证通关与可访问性。
+分支推送和 PR 触发 CI，历史标签推送不重复触发。CI 不使用模型密钥。
 
 ## 开发环境
 
@@ -111,7 +116,7 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 | PostgreSQL | 18；当前固定镜像为 18.6 | 开发库 `truing`、测试库 `truing_test` |
 
 Python 和前端的具体依赖版本分别固定在 `backend/uv.lock` 和 `frontend/package-lock.json`。
-前端当前使用 Element Plus 与 Pinia；设计中的 ECharts 与 Vue Router 随首个使用它们的页面安装。
+前端当前使用 Element Plus、Pinia 与 ECharts；单页工作台尚不需要 Vue Router。
 数据库镜像使用摘要固定，升级补丁版本时需要显式更新 `backend/compose.yaml` 中的摘要并重新验证。
 
 本机已有 Python、Node.js 和 Docker，本次新增的 uv 位于 `~/.local/bin/uv`。
@@ -274,7 +279,7 @@ API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼�
 
 pytest 禁止自动加载宿主机插件，避免本机 ROS 的 `PYTHONPATH` 干扰；
 未来引入异步或浏览器插件时需显式通过 `-p` 启用。
-普通检查不使用真实模型；真实模型评测将在对应阶段实现后单独启用。
+普通检查不使用真实模型；真实模型评测套件已实现，需凭据和预算后单独启用。
 
 自动格式化命令：
 
@@ -288,7 +293,7 @@ npm run format
 
 构建产物位于 `frontend/dist/`，不纳入 Git。
 `npm run preview` 可在本机 4173 端口预览构建，后端仍需运行。
-这些命令用于开发验证，尚未配置正式部署。
+这些命令用于开发验证；部署配置与操作见下文“部署与备份”。
 
 ### 数据库迁移
 
@@ -455,4 +460,7 @@ cat backup-2026-11-02.dump | docker compose -f backend/deploy/compose.yaml exec 
 - [v0.3 交付记录](docs/19-v0.3-delivery.md)
 - [v0.4 交付记录](docs/20-v0.4-delivery.md)
 - [v0.5 交付记录](docs/21-v0.5-delivery.md)
-- [技术栈概览](tech-stack.html)
+- [v0.6 交付记录](docs/22-v0.6-delivery.md)
+- [v1.0 交付记录](docs/23-v1.0-delivery.md)
+- [实现进度](docs/specs/PROGRESS.md)
+- [测试报告](docs/test-report.md)

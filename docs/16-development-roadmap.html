@@ -40,13 +40,13 @@ footer{border-top:1px solid var(--line);margin-top:20px;padding:22px 0 32px;colo
 <main class="wrap" id="main">
 <div class="hero">
 <div class="eyebrow">1 DEVELOPER · ABOUT 15 WEEKS · 7 RUNNABLE RELEASES</div>
-<div class="hero-grid"><div><h1>一个人开发，<br><span>每个版本都能玩。</span></h1><p class="lead">先验证游戏逻辑，再让 AI 扮演角色，最后完善视觉体验。按版本而不是按周交付：每个版本保留上一版能力，增加可演示的新行为，完成门槛后才进入下一版。</p></div><aside class="status" aria-label="计划状态"><span class="pill">一人开发 · v0.1 已完成</span><p>由 5 人 8 周团队计划改写，依据 docs/01～15、AI_rules.md 和 W1 交付记录。</p><p>相对周次 W1～W15；开工时填入日期。<br>改写：2026-10-11</p></aside></div>
+<div class="hero-grid"><div><h1>一个人开发，<br><span>每个版本都能玩。</span></h1><p class="lead">先验证游戏逻辑，再让 AI 扮演角色，最后完善视觉体验。按版本而不是按周交付：每个版本保留上一版能力，增加可演示的新行为，完成门槛后才进入下一版。</p></div><aside class="status" aria-label="计划状态"><span class="pill">一人开发 · v1.0 本地验收完成</span><p>由 5 人 8 周团队计划改写，依据 docs/01～15、AI_rules.md 和 W1 交付记录。</p><p>相对周次 W1～W15；开工时填入日期。<br>改写：2026-10-11</p></aside></div>
 <div class="metrics"><div class="metric"><strong>1 人</strong><span>每周约 20 小时</span></div><div class="metric"><strong>7 版</strong><span>v0.1 → v1.0 · 每版可运行</span></div><div class="metric"><strong>1 案</strong><span>4 NPC / 4 场景 / 12 证据</span></div><div class="metric"><strong>22 项</strong><span>T06～T27，含估时与验收</span></div></div>
 </div>
 <section id="baseline" aria-labelledby="baseline-title">
 <h2 id="baseline-title"><small>01 /</small>范围、容量与止损线</h2>
 <div class="grid2"><div class="card"><h3>交付范围不变</h3><p>1 个人工审核、固定版本的案件；4 NPC、4 场景、12 条证据（5 条关键）、3 条逻辑谎言链，至少 1 条包含两层秘密。完成探索、审讯、出示、人物关系图、时间线、结构化指控、三类判定、固定复盘、自动保存与继续。</p><p class="sub">多层链是对第 08 篇设计的实施安排；3 条链不等于仅有 3 条 lie_rule。压力、信任和四种情绪由程序规则控制。</p></div><div class="card"><h3>容量假设</h3><p>1 × 20 小时 × 约 14 周 ≈ 280 小时，另留 1 周缓冲（W15）。每个版本的估时已含约 20% 的返工余量；任务按 S（约 6 小时）、M（约 10～12 小时）、L（约 14～18 小时）初估，开工时再拆成 2～4 小时的小项。</p><p class="sub">团队版的 800 人时里，约 240 人时用于联调和交叉评审，一人开发没有这部分协调成本；其余差距靠下方的简化项消化，不靠删测试。实际投入明显少于 20 小时/周时按比例顺延，不压缩门槛。</p></div></div>
-<div class="callout"><strong>当前起点：</strong>v0.1 已交付（见 <a href="17-week-one-delivery.md">W1 交付记录</a>）：离线 CLI 切片、领域规则、静态预期和 CI。仓库已拆为 <code>backend/</code> 与 <code>frontend/</code> 两个独立子项目。沿用第 15 篇分层单体和 PostgreSQL；第 09～12 篇的 21 张表随用例分批落地。</div>
+<div class="callout"><strong>原计划起点（2026-10-11）：</strong>v0.1 已交付（见 <a href="17-week-one-delivery.md">W1 交付记录</a>）：离线 CLI 切片、领域规则、静态预期和 CI。仓库已拆为 <code>backend/</code> 与 <code>frontend/</code> 两个独立子项目。沿用第 15 篇分层单体和 PostgreSQL；第 09～12 篇的 21 张表随用例分批落地。</div>
 <div class="panel"><div class="table-wrap" tabindex="0" role="region" aria-label="一人开发相对团队版的调整，可横向滚动"><table class="team-table">
 <caption>一人开发相对团队版的调整：保留所有安全与正确性要求，只改变工作方式和非必要的规模。</caption>
 <thead><tr><th scope="col">事项</th><th scope="col">团队版</th><th scope="col">一人版</th></tr></thead><tbody>
@@ -307,5 +307,5 @@ Estimate: S / M / L
 </ul></li>
 </ol></details>
 </section></main>
-<footer><div class="wrap">The Truing Murders · 一人开发实施计划 · 单文件 HTML，无脚本、无外部资源，可离线阅读。v0.2 起的版本与验收均为待实施目标，不代表功能已完成。</div></footer>
+<footer><div class="wrap">The Truing Murders · 一人开发实施计划 · 单文件 HTML，无脚本、无外部资源，可离线阅读。本页保留原计划与估时；截至 2026-11-02，v0.3～v1.0 的实现与本地自动化验收已完成。当前发布状态与未执行的模型、人工事项见 <a href="specs/PROGRESS.md">实现进度</a>。</div></footer>
 </body></html>
