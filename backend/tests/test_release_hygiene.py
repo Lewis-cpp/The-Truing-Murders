@@ -101,15 +101,7 @@ def test_no_credentials_in_tracked_text():
         assert not pattern.search(text), path
 
 
-def test_delivery_records_exist_for_every_release():
-    docs = ROOT / "docs"
-    for name in (
-        "19-v0.3-delivery.md",
-        "20-v0.4-delivery.md",
-        "21-v0.5-delivery.md",
-        "22-v0.6-delivery.md",
-        "23-v1.0-delivery.md",
-        "test-report.md",
-        "traceability.md",
-    ):
-        assert (docs / name).is_file(), name
+def test_readme_is_the_only_tracked_document():
+    files = tracked()
+    assert [path for path in files if path.endswith(".md")] == ["README.md"]
+    assert not any(path.startswith("docs/") for path in files)

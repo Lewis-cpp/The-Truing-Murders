@@ -1,7 +1,7 @@
 """Ported v0.2 checks: Dependency semantics, loader independence, structural rejection.
 
 The slice-specific publication mutations were superseded by the schema-3 acceptance tests
-(tests/domain/test_case_v3_validation.py); see docs/specs/v0.3/test-amendments.md.
+(tests/domain/test_case_v3_validation.py).
 """
 
 import json

@@ -1,7 +1,0 @@
-{
-  "_note": "Produced by the v0.2 code (commit 105441f) at migration 0002: one visitor, one 2-slice session after A01-A03, talk NPC01, Q01 and presenting E01. Restore v0_2_slice_save.sql at revision 0002 with session_replication_role=replica.",
-  "visitor_token": "sHP-ujuUzWP2D8Rk_aIwxOvtBx_sc2BWN7paGs3fXnA",
-  "session_id": "ad0fd36b-cb08-4d13-88db-517b33850993",
-  "state_version": 7,
-  "case_version": "2-slice"
-}

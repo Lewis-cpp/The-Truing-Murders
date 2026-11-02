@@ -1,7 +1,7 @@
 """Ported v0.2 rule checks that the v0.3 acceptance suite does not cover.
 
 The slice-specific expectations (week_one_verdicts.json, single-NPC state) were retired once
-the full-case acceptance tests covered them; see docs/specs/v0.3/test-amendments.md.
+the full-case acceptance tests covered them.
 """
 
 from dataclasses import replace

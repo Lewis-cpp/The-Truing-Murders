@@ -157,7 +157,7 @@ def _pg_tool(name):
 
 @pytest.mark.skipif(
     not (_pg_tool("pg_dump") and _pg_tool("pg_restore")),
-    reason="needs pg_dump/pg_restore 18 on PATH; record the manual drill in the delivery notes",
+    reason="needs pg_dump/pg_restore 18 on PATH; see README for the recorded manual drill",
 )
 def test_backup_and_restore_keep_an_open_game_playable(client, db, migrated_url, tmp_path):
     player = Player(client)

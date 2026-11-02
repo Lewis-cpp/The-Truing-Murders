@@ -6,8 +6,8 @@
 ## 当前状态
 
 v1.0 的规格实现与本地自动化验收已完成，包含全案玩法、关系图与时间线、部署配置、
-响应式布局和可访问性。最新状态见 [实现进度](docs/specs/PROGRESS.md)，
-验证与限制见 [v1.0 交付记录](docs/23-v1.0-delivery.md) 和 [测试报告](docs/test-report.md)。
+响应式布局和可访问性。main 仅保留程序、测试、必要配置和本 README；
+开发计划、规格与交付记录可从 Git 历史和已有版本标签查看。
 真实模型通关与评测、玩家试用和案件预期的真人复核尚未完成。
 
 四个可审讯角色共用同一套模型生成：各自的知识、历史、秘密和承认状态互相隔离，
@@ -18,7 +18,7 @@ v1.0 的规格实现与本地自动化验收已完成，包含全案玩法、关
 模型输出经服务端检查，没有任何写状态的入口。进度保存在 PostgreSQL，每次操作在一个事务内提交，
 数据库失败时页面不会显示保存成功。待定回复由页面每 1.5 秒轮询，失败降级为固定回复并提示，
 玩家可显式重试（至多两次）。
-记忆机制见 [v0.5 交付记录](docs/21-v0.5-delivery.md)，模型配置见下文[启用模型](#启用模型)。
+模型配置见下文[启用模型](#启用模型)。
 
 审讯规则与 v0.2 切片一致：追问预设话题记为未核验证词，可以用证词和证据指出矛盾；
 出示与当前谎言层无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
@@ -26,7 +26,7 @@ v1.0 的规格实现与本地自动化验收已完成，包含全案玩法、关
 无谎言链的角色（林澄）对任何出示都按无关处理。指控草稿可在指控阶段保存，
 退出后保留，正式提交时被本次内容替换并冻结。
 
-v0.2 的 [W1 案件切片](docs/18-v0.2-delivery.md) 已退役：`slice.json` 从仓库删除，
+v0.2 的案件切片已退役：`slice.json` 从仓库删除，
 已发布的 `2-slice` 版本行与旧存档保留在数据库中但不可继续（`SAVE_VERSION_UNSUPPORTED`）。
 离线命令行现在直接游玩全案（进度只在内存，不需要数据库）。
 可执行配置为 [全案案件文件](backend/assets/cases/case_001/v1/case.json)（人工预期，待真人审阅）。
@@ -34,13 +34,12 @@ v0.2 的 [W1 案件切片](docs/18-v0.2-delivery.md) 已退役：`slice.json` �
 网页链路：Vue 页面 → Vite 同源代理 → FastAPI `/api/v1` → PostgreSQL 18。
 
 仓库分为两个独立子项目：`backend/`（Python、FastAPI、数据库）和 `frontend/`（Vue、Vite）。
-各自带依赖、锁文件和命令，以下命令均在对应子目录内执行。项目按一人独立开发安排，
-排期见 [开发路线图](docs/16-development-roadmap.html)。
+各自带依赖、锁文件和命令，以下命令均在对应子目录内执行。
 
 ## 先玩全案命令行
 
 首次准备 Python 依赖，然后启动。CLI 不需要 `.env`、数据库、Node.js 或模型密钥。
-首次安装可能下载依赖；安装完成后，运行和 W1 测试均可离线进行。
+首次安装可能下载依赖；安装完成后，运行和领域测试均可离线进行。
 
 ```bash
 cd backend
@@ -48,7 +47,7 @@ uv sync --locked
 uv run --offline truing-play
 ```
 
-进入游戏后输入 `look` 查看已开放场景与调查点，`help` 看操作。以下是一条 minimal 路径，
+进入游戏后输入 `look` 查看已开放场景与调查点，`help` 看操作。以下是一条基本操作路径，
 你也可以先集齐证据再审讯，或完全跳过审讯后指控：
 
 ```text
@@ -82,7 +81,7 @@ submit
 连续两次后角色回避，`back` 结束审讯再进入即可恢复。
 证词标为未经核验，NPC 只承认已获准的那一层信息。
 
-W1 检查不需要启动数据库，在 `backend/` 内执行：
+离线检查不需要启动数据库，在 `backend/` 内执行：
 
 ```bash
 uv run --offline ruff format --check src tests
@@ -119,8 +118,7 @@ Python 和前端的具体依赖版本分别固定在 `backend/uv.lock` 和 `fron
 前端当前使用 Element Plus、Pinia 与 ECharts；单页工作台尚不需要 Vue Router。
 数据库镜像使用摘要固定，升级补丁版本时需要显式更新 `backend/compose.yaml` 中的摘要并重新验证。
 
-本机已有 Python、Node.js 和 Docker，本次新增的 uv 位于 `~/.local/bin/uv`。
-其他机器可参考 [uv 官方安装说明](https://docs.astral.sh/uv/getting-started/installation/)。
+安装 uv 可参考 [uv 官方安装说明](https://docs.astral.sh/uv/getting-started/installation/)。
 Node.js 版本要求参见 [Vite 官方文档](https://vite.dev/guide/)。
 PostgreSQL 18 的持久卷挂载到 `/var/lib/postgresql`，遵循
 [官方镜像说明](https://hub.docker.com/_/postgres)，不沿用旧版本的挂载目录。
@@ -174,7 +172,7 @@ npm run dev
 
 ### 接口概览
 
-在 v0.2 的会话与审讯接口之上，新增以下只读资源与写接口（均挂在
+主要资源与写接口如下（均挂在
 `/api/v1/sessions/{session_id}` 下，写接口仍需 `Idempotency-Key` 与
 `X-Expected-State-Version`）：
 
@@ -280,6 +278,8 @@ API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼�
 pytest 禁止自动加载宿主机插件，避免本机 ROS 的 `PYTHONPATH` 干扰；
 未来引入异步或浏览器插件时需显式通过 `-p` 启用。
 普通检查不使用真实模型；真实模型评测套件已实现，需凭据和预算后单独启用。
+备份恢复自动测试需要 PATH 上有 PostgreSQL 18 的 `pg_dump` 和 `pg_restore`，缺少时明确跳过。
+历史手动演练已在 PostgreSQL 18.6 验证备份、恢复后存档一致且可继续游玩；记录保存在 Git 历史中。
 
 自动格式化命令：
 
@@ -324,7 +324,7 @@ uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 规则执行版本升为 `full-1` 后，旧的 `2-slice` 及更早存档原样保留，但不能继续。
 页面会提示存档无法读取并显示案件列表；玩家确认后，新局取代它成为当前存档。
 注意：`alembic downgrade 0002` 会丢弃全案静态新增列与 `lie_chain`、`relationship`、
-`timeline_event` 三张表（规格只要求空库降级成功）；若在开发库执行过降级再升级，
+`timeline_event` 三张表（仅验证空库降级）；若在开发库执行过降级再升级，
 需要删除 `case_001` 的 `3-full` 模板行后重新执行上面的导入命令。
 
 ### 部署与备份
@@ -380,87 +380,26 @@ cat backup-2026-11-02.dump | docker compose -f backend/deploy/compose.yaml exec 
 
 ## 目录结构
 
-以下结构依据 [后端开发计划](docs/15-development-plan.md)、
-[前端设计](docs/11-frontend-design.md) 和 [测试设计](docs/14-testing.md)。
-仅列出主要模块目录，省略入口、工具配置和 `.gitkeep` 文件。
-空目录暂用零字节 `.gitkeep` 纳入 Git，添加实际文件后移除对应占位。
-
 ```text
 .
-├── backend/                             # Python 子项目：pyproject.toml、uv.lock、alembic.ini、compose.yaml
-│   ├── src/backend/
-│   │   ├── api/                         # HTTP 输入、响应与错误适配
-│   │   │   ├── routes/                  # 按业务资源组织路由
-│   │   │   └── schemas/                 # 公开请求与响应模型
-│   │   ├── application/                 # 用例、事务、生成与记忆编排
-│   │   ├── domain/                      # 状态机、证据、规则与领域模型
-│   │   └── infrastructure/              # 数据库与 LLM 接入
-│   │       └── database/
-│   │           ├── models/              # 数据表映射
-│   │           ├── repositories/        # 数据读取与保存
-│   │           └── migrations/
-│   │               └── versions/        # 数据库迁移历史
-│   ├── assets/                          # 仅后端读取的资源
-│   │   ├── database/                    # 本地数据库初始化资源
-│   │   ├── cases/
-│   │   │   └── case_001/
-│   │   │       └── v1/                  # 首个案件版本的导入资源
-│   │   └── prompts/                     # 后端角色提示词模板
-│   └── tests/
-│       ├── data/
-│       │   ├── cases/                   # 合成测试案件
-│       │   ├── expected/                # 人工独立预期与通关路径
-│       │   └── agent/                   # 异常输出与模型评测题集
-│       ├── domain/                      # 领域行为检查
-│       ├── application/                 # 应用编排与角色隔离检查
-│       ├── infrastructure/              # 数据库与模型接入检查
-│       ├── integration/                 # 事务、并发与恢复检查
-│       ├── api/                         # HTTP 契约检查
-│       ├── e2e/                         # 浏览器完整流程检查
-│       └── agent_eval/                  # 显式启用的真实模型评测
-├── frontend/                            # Node 子项目：package.json、Vite、TS、ESLint、Prettier
-│   ├── src/
-│   │   ├── router/                      # 页面路由
-│   │   ├── layouts/                     # 游戏主界面布局
-│   │   ├── views/                       # 路由页面
-│   │   ├── components/
-│   │   │   ├── game/                    # 导航与公共游戏界面
-│   │   │   ├── investigation/           # 场景调查与固定结果
-│   │   │   ├── interrogation/           # 审讯对话
-│   │   │   ├── evidence/                # 证据背包与详情
-│   │   │   └── reasoning/               # 关系图、时间线与过程编辑
-│   │   ├── stores/                      # 前端状态
-│   │   ├── api/                         # 公开 API 客户端与类型
-│   │   ├── composables/                 # 回复轮询与图表逻辑
-│   │   └── styles/                      # 主题与样式
-│   ├── public/                          # 可公开的图片与字体
-│   └── tests/                           # 组件与页面状态检查
-└── docs/                                # 需求、架构与开发计划
+├── README.md
+├── .github/workflows/ci.yml       # 自动化检查
+├── backend/
+│   ├── src/backend/              # API、应用、领域、数据库与模型接入
+│   ├── assets/                   # 案件、提示词与数据库初始化资源
+│   ├── tests/                    # 单元、集成、浏览器与模型评测
+│   ├── deploy/                   # 部署配置与反向代理
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── alembic.ini
+│   ├── compose.yaml
+│   └── Dockerfile
+└── frontend/
+    ├── src/                      # Vue 页面、组件、状态与 API 客户端
+    ├── tests/                    # 组件与页面行为检查
+    ├── package.json
+    └── package-lock.json
 ```
 
-## 模块边界
-
-- 后端采用 `api / application / domain / infrastructure` 四层模块化单体。
-  具体模块文件名和依赖方向见后端开发计划，随实现建立。
-- 前后端是两个独立子项目，互不读取对方目录；前端只通过 `/api` 访问后端。
-- 案件包与提示词只放在 `backend/assets/`，仅供后端读取。前端公开资源放在 `frontend/public/`。
-- 自动化检查放在各子项目的 `tests/`；后端按源码层级组织，跨层流程和浏览器检查单列。
-- 工具配置随子项目放置，根目录只留文档、CI 和 `.gitignore`。Python 源码采用 `src` 包布局。
-  `.gitignore` 排除本地配置、依赖、缓存、构建、测试报告和数据库备份。
-
-## 设计文档
-
-- [项目范围与 MVP](docs/01-project-scope.md)
-- [总体架构](docs/03-architecture-design.md)
-- [前端设计](docs/11-frontend-design.md)
-- [测试架构与矩阵](docs/14-testing.md)
-- [后端目录与开发边界](docs/15-development-plan.md)
-- [开发路线图（一人开发）](docs/16-development-roadmap.html)
-- [分阶段实现规格（v0.3～v1.0）](docs/specs/README.md)
-- [v0.3 交付记录](docs/19-v0.3-delivery.md)
-- [v0.4 交付记录](docs/20-v0.4-delivery.md)
-- [v0.5 交付记录](docs/21-v0.5-delivery.md)
-- [v0.6 交付记录](docs/22-v0.6-delivery.md)
-- [v1.0 交付记录](docs/23-v1.0-delivery.md)
-- [实现进度](docs/specs/PROGRESS.md)
-- [测试报告](docs/test-report.md)
+案件包与提示词只供后端读取，前端只通过 API 获取公开内容。
+本地配置、依赖、缓存、构建产物、测试报告和数据库备份由 `.gitignore` 排除，不提交到仓库。
