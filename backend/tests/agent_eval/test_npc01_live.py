@@ -14,15 +14,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from backend.application.conversation import check_reply, load_guard
-from backend.application.memory import ContextBudget, build_context
-from backend.infrastructure.llm_client import LLMCall, LLMGateway
 
 from backend.application.case import load_case
+from backend.application.conversation import check_reply, load_guard
+from backend.application.memory import ContextBudget, build_context
 from backend.config import Settings
 from backend.domain import rules
 from backend.domain.evidence import current_statement
 from backend.domain.state_machine import transition
+from backend.infrastructure.llm_client import LLMCall, LLMGateway
 
 pytestmark = [
     pytest.mark.live_llm,

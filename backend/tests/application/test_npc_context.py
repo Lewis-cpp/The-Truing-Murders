@@ -8,6 +8,8 @@ import json
 import re
 
 import pytest
+
+from backend.application.case import load_case
 from backend.application.memory import (
     AuthorizedContext,
     ContextBudget,
@@ -16,8 +18,6 @@ from backend.application.memory import (
     build_context,
     estimate_tokens,
 )
-
-from backend.application.case import load_case
 from backend.domain import rules
 from backend.domain.evidence import current_statement
 from backend.domain.state_machine import transition
