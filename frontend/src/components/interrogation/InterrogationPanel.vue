@@ -40,8 +40,13 @@ function isPending(round: { generation_status: string }): boolean {
   return PENDING_ROUNDS.includes(round.generation_status)
 }
 
-function isExpired(round: { generation_status: string; deadline_exceeded: boolean }): boolean {
-  return isPending(round) && round.deadline_exceeded
+// Expired and no longer polled: the page has stopped waiting for this round.
+function isExpired(round: {
+  conversation_id: string
+  generation_status: string
+  deadline_exceeded: boolean
+}): boolean {
+  return isPending(round) && round.deadline_exceeded && game.pollingId !== round.conversation_id
 }
 
 // The newest fallback of this person; older ones stay in the transcript as history.
@@ -108,6 +113,14 @@ function contradict() {
           </p>
           <p v-if="isExpired(round)" data-testid="reply-expired" class="pending">
             回复未能按时生成，可以继续提问
+            <ElButton
+              data-testid="check-reply"
+              size="small"
+              link
+              @click="game.checkRound(round.conversation_id)"
+            >
+              检查结果
+            </ElButton>
           </p>
           <p v-else-if="isPending(round)" class="pending">回复准备中</p>
         </article>

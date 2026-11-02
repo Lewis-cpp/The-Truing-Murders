@@ -45,6 +45,8 @@ const OUTDATED = [
 // Rounds waiting for the model; the page polls each one until it settles.
 const PENDING_ROUNDS = ['PREPARING', 'GENERATING']
 const POLL_INTERVAL_MS = 1500
+// Polls kept after the deadline: a late model call settles shortly after it, a lost task never.
+const EXPIRED_POLL_LIMIT = 4
 
 /** Server state only. The page is always rebuilt from a fresh GET after a confirmed write. */
 export const useGameStore = defineStore('game', () => {
@@ -66,6 +68,7 @@ export const useGameStore = defineStore('game', () => {
   // The round the page is polling for, if any; the timer itself stays non-reactive.
   const pollingId = ref<string | null>(null)
   let pollTimer: ReturnType<typeof setInterval> | null = null
+  let expiredPolls = 0
 
   function base(): string {
     return `/api/v1/sessions/${view.value?.session.session_id}`
@@ -101,9 +104,8 @@ export const useGameStore = defineStore('game', () => {
       if (index >= 0) conversations.value.splice(index, 1, round)
       else conversations.value.push(round)
       // A final state ends the polling; the server writes it, the page only reads it.
-      // An expired round only clears on the next write, so waiting longer cannot help.
-      if (!PENDING_ROUNDS.includes(round.generation_status) || round.deadline_exceeded)
-        stopPolling()
+      if (!PENDING_ROUNDS.includes(round.generation_status)) stopPolling()
+      else if (round.deadline_exceeded && ++expiredPolls >= EXPIRED_POLL_LIMIT) stopPolling()
     } catch {
       // A failed poll keeps the placeholder; the next tick tries again.
     }
@@ -112,6 +114,7 @@ export const useGameStore = defineStore('game', () => {
   function startPolling(conversationId: string) {
     if (pollTimer !== null && pollingId.value === conversationId) return
     stopPolling()
+    expiredPolls = 0
     pollingId.value = conversationId
     pollTimer = setInterval(() => {
       void pollOnce()
@@ -259,6 +262,8 @@ export const useGameStore = defineStore('game', () => {
     citeRequests,
     pollingId,
     stopPolling,
+    // Read-only: polls an expired round again, for a settlement after the page stopped waiting.
+    checkRound: startPolling,
     emptyDraft,
     init,
     retry: () => pending.value && run(pending.value, summarize),

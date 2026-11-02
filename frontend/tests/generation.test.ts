@@ -284,8 +284,43 @@ describe('generation polling', () => {
     })
     const wrapper = await mountView()
     await vi.advanceTimersByTimeAsync(6000)
-    expect(polls).toBe(1)
+    expect(polls).toBe(4)
     expect(wrapper.find('[data-testid="reply-expired"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="check-reply"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(1600)
+    expect(polls).toBe(5)
+    wrapper.unmount()
+  })
+
+  it('keeps polling briefly after the deadline and shows a late timeout fallback', async () => {
+    const states = [
+      round('GENERATING', { deadline_exceeded: true }),
+      round('FALLBACK', {
+        deadline_exceeded: true,
+        fallback_reason: 'MODEL_TIMEOUT',
+        can_retry_reply: true,
+      }),
+    ]
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': () =>
+        json(200, { current_session_id: id, session: talkingView([round('GENERATING')]) }),
+      [`GET ${session}/npcs/NPC01/conversations?limit=20`]: () =>
+        json(200, {
+          session_id: id,
+          state_version: 9,
+          data: { items: [round('GENERATING')], next_before_seq: null },
+        }),
+      [`GET ${session}/conversations/${conversationId}`]: () => {
+        const current = states.length > 1 ? states.shift()! : states[0]
+        return json(200, { session_id: id, state_version: 9, data: current })
+      },
+    })
+    const wrapper = await mountView()
+    await vi.advanceTimersByTimeAsync(3200)
+    expect(wrapper.find('[data-testid="fallback-notice"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="retry-reply"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="reply-expired"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
