@@ -10,6 +10,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.16,<2",
     "fastapi>=0.115,<1",
+    "httpx2>=2.13.1",
     "psycopg[binary]>=3.2,<4",
     "pydantic>=2.9,<3",
     "pydantic-settings>=2.9,<3",
@@ -22,7 +23,7 @@ truing-play = "backend.cli:main"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13.1",
+    "playwright>=1.64.1",
     "pytest>=8.4,<10",
     "ruff>=0.11,<1",
 ]
@@ -31,12 +32,23 @@ dev = [
 packages = ["src/backend"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"assets/cases/case_001/v1/slice.json" = "backend/case_data/case_001/v1/slice.json"
+"assets/cases/case_001/v1/case.json" = "backend/case_data/case_001/v1/case.json"
+"assets/cases/case_001/v1/guard.json" = "backend/case_data/case_001/v1/guard.json"
+"assets/prompts/npc_system.v1.txt" = "backend/prompt_data/npc_system.v1.txt"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # The host may export ROS plugins through PYTHONPATH. Enable needed plugins explicitly.
-addopts = ["--disable-plugin-autoload", "--strict-markers", "-m", "not live_llm and not performance"]
+# importlib keeps tests/e2e/conftest.py from shadowing the root conftest for the
+# `from conftest import ...` imports; pythonpath makes that import deterministic.
+addopts = [
+    "--disable-plugin-autoload",
+    "--strict-markers",
+    "--import-mode=importlib",
+    "-m",
+    "not live_llm and not performance and not e2e",
+]
+pythonpath = ["tests"]
 markers = [
     "unit: isolated deterministic checks",
     "integration: real database and application boundaries",

@@ -17,6 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "echarts": "^6.1.0",
     "element-plus": "^2.14.7",
     "pinia": "^4.0.3",
     "vue": "^3.5.43"
@@ -26,6 +27,7 @@
     "@types/node": "^24.19.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",
+    "axe-core": "^4.14.0",
     "eslint": "^10.12.0",
     "eslint-plugin-vue": "^10.11.1",
     "globals": "^17.13.0",

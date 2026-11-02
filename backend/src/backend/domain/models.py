@@ -1,6 +1,7 @@
-"""The deliberately small W1 contract; it is not the future rule DSL."""
+"""The full-case contract (schema 3); fixed structures agreed with the v0.3 tests."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -49,9 +50,11 @@ class Choice(Definition):
 class Evidence(Definition):
     id: Text
     title: Text
+    kind: Literal["PHYSICAL", "DOCUMENT", "TESTIMONY", "DIGITAL"]
     content: Text
     source: Text
     credibility: Literal["VERIFIED", "UNVERIFIED"]
+    is_key: bool
 
 
 class Investigation(Definition):
@@ -65,6 +68,7 @@ class Scene(Definition):
     id: Text
     name: Text
     description: Text
+    unlock: Dependency
     actions: tuple[Investigation, ...]
 
 
@@ -72,8 +76,14 @@ class Character(Definition):
     id: Text
     name: Text
     role: Text
-    initial_pressure: Level
-    initial_trust: Level
+    public_identity: Text
+    personality: Text | None
+    speech_style: Text | None
+    interrogatable: bool
+    initial_pressure: Level | None
+    initial_trust: Level | None
+    core_lie_ids: tuple[Text, ...]
+    default_reply: Text | None
 
 
 class Knowledge(Definition):
@@ -108,6 +118,14 @@ class Lie(Definition):
     effects: tuple[PresentEffect, ...]
 
 
+class LieChain(Definition):
+    """Groups one NPC's layers; the order of lie_ids is the layer order."""
+
+    id: Text
+    npc_id: Text
+    lie_ids: tuple[Text, ...]
+
+
 class Topic(Definition):
     """A fixed question. Asking records the NPC's fixed answer as unverified testimony."""
 
@@ -132,7 +150,7 @@ class Contradiction(Definition):
 
 
 class Interrogation(Definition):
-    """Costs of irrelevant moves, and the fixed topics and contradictions of the slice."""
+    """Costs of irrelevant moves, and the fixed topics and contradictions of the case."""
 
     irrelevant_trust: Annotated[int, Field(ge=-100, le=0)]
     evade_after: Annotated[int, Field(ge=1, le=10)]
@@ -140,6 +158,40 @@ class Interrogation(Definition):
     evade_reply: Text
     topics: tuple[Topic, ...]
     contradictions: tuple[Contradiction, ...]
+
+
+class Relationship(Definition):
+    id: Text
+    from_id: Text
+    to_id: Text
+    type: Text
+    directed: bool
+    description: Text
+    assertion_kind: Literal["FACT", "TESTIMONY"]
+    credibility: Literal["VERIFIED", "UNVERIFIED"]
+    source_kind: Literal["PUBLIC", "EVIDENCE", "NPC"]
+    source_id: Text | None
+    reveal_evidence_ids: tuple[Text, ...]
+    reveal_knowledge_ids: tuple[Text, ...]
+
+
+class TimelineEvent(Definition):
+    id: Text
+    title: Text
+    description: Text
+    scene_id: Text | None
+    participant_ids: tuple[Text, ...]
+    precision: Literal["EXACT", "RANGE", "UNKNOWN"]
+    start_minutes: int | None
+    end_minutes: int | None
+    time_label: Text
+    assertion_kind: Literal["FACT", "TESTIMONY"]
+    credibility: Literal["VERIFIED", "UNVERIFIED"]
+    source_kind: Literal["PUBLIC", "EVIDENCE", "NPC"]
+    source_id: Text | None
+    reveal_evidence_ids: tuple[Text, ...]
+    reveal_knowledge_ids: tuple[Text, ...]
+    conflicts_with: tuple[Text, ...]
 
 
 class Truth(Definition):
@@ -169,24 +221,31 @@ class Scoring(Definition):
 
 
 class Case(Definition):
-    schema_version: Literal[2]
-    scope: Literal["week_one_slice"]
+    schema_version: Literal[3]
+    scope: Literal["full_case"]
     case_id: Text
     version: Text
     rules_version: Text
     title: Text
+    synopsis: Text
     introduction: Text
-    review_status: Literal["pending_human_review"]
-    scene: Scene
-    npc: Character
+    review_status: Literal["pending_human_review", "approved"]
+    timeline_origin_label: Text
+    show_key_badges: bool
+    characters: tuple[Character, ...]
+    scenes: tuple[Scene, ...]
+    evidence: tuple[Evidence, ...]
+    knowledge: tuple[Knowledge, ...]
+    lies: tuple[Lie, ...]
+    lie_chains: tuple[LieChain, ...]
+    interrogation: Interrogation
+    deep_unlock: Dependency
+    relationships: tuple[Relationship, ...]
+    timeline: tuple[TimelineEvent, ...]
     suspects: tuple[Choice, ...]
     weapons: tuple[Choice, ...]
     motives: tuple[Choice, ...]
     process_steps: tuple[Choice, ...]
-    evidence: tuple[Evidence, ...]
-    knowledge: tuple[Knowledge, ...]
-    lie: Lie
-    interrogation: Interrogation
     truth: Truth
     scoring: Scoring
 
@@ -206,11 +265,23 @@ class Accusation(Definition):
     explanation: Annotated[str, Field(max_length=4000)] = ""
 
 
+class AccusationDraft(Definition):
+    """A saveable partial accusation; the three choices may stay open and steps may be empty."""
+
+    culprit: Text | None
+    weapon: Text | None
+    motive: Text | None
+    steps: tuple[Text, ...]
+    cited_evidence_ids: tuple[Text, ...]
+    evidence_links: tuple[StepEvidenceLink, ...]
+    explanation: Annotated[str, Field(max_length=4000)] = ""
+
+
 @dataclass(frozen=True)
 class NPCState:
     pressure: int
     trust: int
-    lie_stage: LieStage = LieStage.UNBROKEN
+    lies: Mapping[str, LieStage]  # every layer of this NPC, initially UNBROKEN
     presented: frozenset[str] = frozenset()
     # Consecutive irrelevant moves in the current interrogation; leaving resets it.
     irrelevant_streak: int = 0
@@ -223,6 +294,7 @@ class CriterionResult:
     points: int
     maximum: int
     explanation: str
+    missing_evidence_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -234,11 +306,12 @@ class Verdict:
     evidence_snapshot: frozenset[str]
     case_version: str
     rules_version: str
+    fixed_explanation: str = ""
 
 
 @dataclass(frozen=True)
 class GameState:
-    npc: NPCState
+    npcs: Mapping[str, NPCState]  # one entry per interrogatable character
     phase: Phase = Phase.INVESTIGATION
     active_npc_id: str | None = None
     evidence_ids: frozenset[str] = frozenset()
@@ -246,6 +319,7 @@ class GameState:
     disclosed_knowledge: frozenset[str] = frozenset()
     consumed_effects: frozenset[str] = frozenset()
     deep_unlocked: bool = False
+    draft: AccusationDraft | None = None
     verdict: Verdict | None = None
     version: int = 1
 

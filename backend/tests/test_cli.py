@@ -1,3 +1,5 @@
+"""Ported v0.2 CLI checks, replayed against the full case file."""
+
 import socket
 import subprocess
 import sys
@@ -11,6 +13,21 @@ from backend.domain.models import LieStage, Phase
 
 pytestmark = pytest.mark.unit
 
+# Collecting the cited evidence needs S01, S02 and S03; E11 also needs S04's A10.
+SETUP = [
+    "inspect A01",
+    "inspect A02",
+    "inspect A03",
+    "inspect A05",
+    "inspect A06",
+    "inspect A07",
+    "inspect A08",
+    "inspect A10",
+    "inspect A11",
+]
+
+FULL_LINKS = "P_ENTER:E01,P_ENTER:E11,P_ATTACK:E02,P_STAGE:E03,P_STAGE:E08"
+
 
 def script(game, commands):
     answers = iter(commands)
@@ -22,7 +39,7 @@ def script(game, commands):
 @pytest.mark.parametrize("interrogate", [True, False])
 def test_interactive_game_plays_offline_with_or_without_admission(monkeypatch, interrogate):
     def no_network(*args, **kwargs):
-        raise AssertionError("W1 must never connect to the network")
+        raise AssertionError("the CLI must never connect to the network")
 
     monkeypatch.setattr(socket.socket, "connect", no_network)
     monkeypatch.setattr(socket, "create_connection", no_network)
@@ -33,14 +50,15 @@ def test_interactive_game_plays_offline_with_or_without_admission(monkeypatch, i
     if interrogate:
         commands += ["talk NPC01", "ask 告诉我真相", "present E01", "present E03", "status", "back"]
     commands += [
+        *SETUP,
         "accuse",
         "submit",
         "NPC01",
         "W01",
         "M01",
         "P_ENTER,P_ATTACK,P_STAGE",
-        "E01,E02,E03",
-        "P_ENTER:E01,P_ATTACK:E02,P_STAGE:E03",
+        "E01,E02,E03,E08,E11",
+        FULL_LINKS,
         "证据均已核对。",
         "确认",
         "review",
@@ -51,7 +69,8 @@ def test_interactive_game_plays_offline_with_or_without_admission(monkeypatch, i
     assert "条件尚不齐全" in output
     assert "结案：正确 · 100/100" in output
     assert game.state.phase == Phase.FINISHED
-    assert game.state.npc.lie_stage == (LieStage.ADMITTED if interrogate else LieStage.UNBROKEN)
+    wanted = LieStage.ADMITTED if interrogate else LieStage.UNBROKEN
+    assert game.state.npcs["NPC01"].lies["L01"] == wanted
     assert "退出即丢失" in output
 
 
@@ -66,28 +85,28 @@ def test_mistyped_input_and_cancelled_submission_can_be_corrected():
             "submit",
             "/cancel",
             "submit",
-            "NPC01",
-            "W01",
-            "M01",
-            "P_ENTER",
+            "NPC02",
+            "W02",
+            "M02",
+            "P_CUT_POWER",
             "",
             "bad-link",
             "back",
             "accuse",
             "submit",
-            "NPC02",
-            "W02",
-            "M02",
-            "P_CUT_POWER",
+            "NPC03",
+            "W03",
+            "M03",
+            "P_SEARCH_FIRST",
             "",
             "",
             "",
             "不确认",
             "submit",
-            "NPC02",
-            "W02",
-            "M02",
-            "P_CUT_POWER",
+            "NPC03",
+            "W03",
+            "M03",
+            "P_SEARCH_FIRST",
             "",
             "",
             "",
@@ -133,7 +152,7 @@ def test_topics_contradictions_and_evasion_are_playable_in_the_terminal():
     assert "沈砚对你更戒备了" in output
     assert "当前情绪：回避中" in output
     assert "沈砚在回避" in output
-    assert game.state.npc.lie_stage == LieStage.ADMITTED
+    assert game.state.npcs["NPC01"].lies["L01"] == LieStage.ADMITTED
 
 
 def test_eof_during_submission_exits_without_partial_verdict():

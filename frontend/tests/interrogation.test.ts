@@ -5,7 +5,17 @@ import { ElOption, ElPopconfirm, ElSelect } from 'element-plus'
 import GameView from '../src/views/GameView.vue'
 import { useGameStore } from '../src/stores/game'
 import type { KnownInformation, NpcView, SessionView } from '../src/api/types'
-import { caseSummary, json, sessionView, stubFetch } from './fixtures'
+import {
+  caseSummary,
+  conversation,
+  conversationPage,
+  emptyDraft,
+  evidence,
+  json,
+  npc,
+  sessionView,
+  stubFetch,
+} from './fixtures'
 
 beforeEach(() => setActivePinia(createPinia()))
 afterEach(() => vi.unstubAllGlobals())
@@ -15,24 +25,7 @@ const base = {
   'GET /api/v1/cases': () => json(200, { items: [caseSummary] }),
 }
 const session = '/api/v1/sessions/00000000-0000-4000-8000-000000000001'
-
-function npc(overrides: Partial<NpcView> = {}): NpcView {
-  return {
-    npc_id: 'NPC01',
-    name: '甲',
-    public_identity: '研究员',
-    is_contactable: true,
-    is_active: true,
-    is_evading: false,
-    emotion: 'CALM',
-    admission_progress: 'NONE',
-    display_state: 'CALM',
-    fixed_statement: '我一直在休息区。',
-    presented_evidence_ids: [],
-    topics: [{ topic_id: 'Q01', label: '丢了什么？', asked: false }],
-    ...overrides,
-  }
-}
+const log = `GET ${session}/npcs/NPC01/conversations?limit=20`
 
 function testimony(id: string, kind: string, sourceId: string | null): KnownInformation {
   return {
@@ -42,6 +35,7 @@ function testimony(id: string, kind: string, sourceId: string | null): KnownInfo
     source: { kind, id: sourceId, label: kind === 'NPC' ? '甲' : '案件公开信息' },
     credibility: 'UNVERIFIED',
     discovered_at: null,
+    known_conflicts: [],
   }
 }
 
@@ -61,17 +55,15 @@ function interrogation(state: Partial<NpcView> = {}, version = 5): SessionView {
       'RESTART',
     ],
   })
-  view.npcs = [npc(state)]
-  view.evidence = [
-    {
-      evidence_id: 'E03',
-      name: '移交联',
-      content: '缺失清单。',
-      source: { kind: 'SCENE', id: 'S01', label: '档案柜' },
-      credibility: 'VERIFIED',
-      discovered_at: '2026-10-12T00:00:00Z',
-    },
+  view.npcs = [
+    npc({
+      is_active: true,
+      fixed_statement: '我一直在休息区。',
+      topics: [{ topic_id: 'Q01', label: '丢了什么？', asked: false }],
+      ...state,
+    }),
   ]
+  view.evidence = [evidence()]
   return view
 }
 
@@ -86,6 +78,7 @@ function result(data: unknown, version = 6) {
     phase_after: 'INTERROGATION',
     saved_at: '2026-10-12T00:00:00Z',
     data,
+    conversation: null,
   }
 }
 
@@ -120,6 +113,7 @@ describe('interrogation', () => {
     stubFetch({
       ...base,
       'GET /api/v1/sessions/current': views(interrogation(), after),
+      [log]: () => conversationPage([conversation(1, '丢了什么？', '肯定是被偷了。')]),
       [`POST ${session}/npcs/NPC01/questions`]: (init) => {
         requests.push(sent(init))
         return json(
@@ -136,7 +130,7 @@ describe('interrogation', () => {
     await flushPromises()
     expect(requests).toEqual([{ body: { topic_id: 'Q01' }, version: '5' }])
     expect(wrapper.get('[role="status"]').text()).toContain('证词已记录')
-    expect(wrapper.text()).toContain('甲：肯定是被偷了。')
+    expect(wrapper.get('[data-testid="conversation-log"]').text()).toContain('甲：肯定是被偷了。')
     expect(button(wrapper, '丢了什么？（已问）').exists()).toBe(true)
     expect(wrapper.text()).toContain('K03 的内容')
     wrapper.unmount()
@@ -153,6 +147,7 @@ describe('interrogation', () => {
     stubFetch({
       ...base,
       'GET /api/v1/sessions/current': views(view),
+      [log]: () => conversationPage([]),
       [`POST ${session}/npcs/NPC01/contradictions`]: (init) => {
         requests.push(sent(init))
         return json(
@@ -166,7 +161,7 @@ describe('interrogation', () => {
     })
     const wrapper = await mountView()
     expect(button(wrapper, '指出矛盾').attributes('disabled')).toBeDefined()
-    const [, cited, against] = wrapper.findAllComponents(ElSelect)
+    const [cited, against] = wrapper.findAllComponents(ElSelect)
     const citable = cited.findAllComponents(ElOption).map((option) => option.props('value'))
     expect(citable).toEqual(['K03'])
     cited.vm.$emit('update:modelValue', 'K03')
@@ -176,17 +171,17 @@ describe('interrogation', () => {
     await flushPromises()
     expect(requests).toEqual([{ body: { knowledge_id: 'K03', evidence_id: 'E03' }, version: '5' }])
     expect(wrapper.find('[role="status"] .el-alert--success').text()).toContain('矛盾成立')
-    expect(wrapper.text()).toContain('甲：……我是猜的。')
     wrapper.unmount()
   })
 
   it('warns about irrelevant moves and evasion, and clears the transcript on leaving', async () => {
     const evading = interrogation({ is_evading: true, display_state: 'EVADING' })
     const left = sessionView({ phase: 'DEEP_INVESTIGATION', state_version: 7 })
-    left.npcs = [npc({ is_active: false, fixed_statement: null })]
+    left.npcs = [npc()]
     stubFetch({
       ...base,
       'GET /api/v1/sessions/current': views(interrogation(), evading, left, interrogation({}, 8)),
+      [log]: () => conversationPage([conversation(1, '出示', '我现在不想再谈了。')]),
       [`POST ${session}/npcs/NPC01/evidence-presentations`]: () =>
         json(
           201,
@@ -200,22 +195,23 @@ describe('interrogation', () => {
     })
     const wrapper = await mountView()
     expect(wrapper.text()).toContain('接连这样做，对方会开始回避')
-    wrapper.findAllComponents(ElSelect)[0].vm.$emit('update:modelValue', 'E03')
-    await flushPromises()
-    await button(wrapper, '出示').trigger('click')
+    await wrapper.get('[data-testid="present-E03"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="status"] .el-alert--warning').text()).toContain('开始回避')
-    expect(wrapper.find('.npc .el-tag').text()).toBe('回避')
+    expect(wrapper.get('[data-testid="npc-NPC01"]').find('.el-tag').text()).toBe('回避中')
     expect(wrapper.text()).toContain('甲在回避，暂时问不出什么。结束审讯后再来。')
-    expect(wrapper.findAll('.reply').map((reply) => reply.text())).toEqual([
+    expect(wrapper.get('[data-testid="conversation-log"]').text()).toContain(
       '甲：我现在不想再谈了。',
-    ])
+    )
     await button(wrapper, '结束审讯').trigger('click')
     await flushPromises()
+    // Outside the interrogation the transcript is gone; the server keeps the rounds.
+    expect(wrapper.find('[data-testid="conversation-log"]').exists()).toBe(false)
     await button(wrapper, '审讯').trigger('click')
     await flushPromises()
     expect(wrapper.text()).not.toContain('在回避')
-    expect(wrapper.findAll('.reply')).toHaveLength(0)
+    // Re-entering reads the stored history again; it is not a live transcript.
+    expect(wrapper.get('[data-testid="conversation-log"]').text()).toContain('我现在不想再谈了。')
     wrapper.unmount()
   })
 })
@@ -256,7 +252,7 @@ describe('unreadable save', () => {
       {
         body: {
           case_id: 'case_001',
-          case_version: '2-slice',
+          case_version: '3-full',
           replaces_session_id: 'old-session',
           confirm_restart: true,
         },
@@ -409,21 +405,26 @@ describe('outdated page', () => {
     stubFetch({
       ...base,
       'GET /api/v1/sessions/current': views(interrogation(), fresh),
+      [log]: () => conversationPage([]),
+      [`GET /api/v1/sessions/${second}/npcs/NPC01/conversations?limit=20`]: () =>
+        conversationPage([]),
       'POST /api/v1/sessions': () => json(201, result(fresh, 1)),
     })
     const wrapper = await mountView()
-    wrapper.findAllComponents(ElSelect)[0].vm.$emit('update:modelValue', 'E03')
+    await wrapper.get('[data-testid="present-E03"]').trigger('click')
     await flushPromises()
-    expect(button(wrapper, '出示').attributes('disabled')).toBeUndefined()
 
-    wrapper.findComponent(ElPopconfirm).vm.$emit('confirm', new MouseEvent('click'))
+    await wrapper.get('[data-testid="restart-game"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-restart"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('.feedback.error').exists()).toBe(false)
-    expect(button(wrapper, '出示').attributes('disabled')).toBeDefined()
+    // The new game starts with an empty bag, so there is nothing to present yet.
+    expect(wrapper.find('[data-testid="present-E03"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
   it('starts a fresh transcript after leaving through the accusation form', async () => {
+    let rounds: ReturnType<typeof conversation>[] = []
     stubFetch({
       ...base,
       'GET /api/v1/sessions/current': views(
@@ -433,21 +434,28 @@ describe('outdated page', () => {
         sessionView({ state_version: 8 }),
         interrogation({}, 9),
       ),
+      [log]: () => conversationPage(rounds),
       [`POST ${session}/npcs/NPC01/conversations`]: () =>
-        json(201, result({ npc_id: 'NPC01', fixed_reply: '我一直在休息区。' })),
+        json(201, result({ conversation_id: '00000000-0000-4000-8000-0000000001001' }, 6)),
       [`PUT ${session}/accusation-preparation`]: () => json(201, result({}, 7)),
       [`DELETE ${session}/accusation-preparation`]: () => json(200, result({}, 8)),
       [`PUT ${session}/interrogation`]: () => json(201, result({}, 9)),
     })
     const game = useGameStore()
     await game.init()
+    expect(game.conversations).toEqual([])
+    rounds = [conversation(1, '你在哪里？', '我一直在休息区。')]
     await game.chat('NPC01', '你在哪里？')
-    expect(game.replies).toEqual(['我一直在休息区。'])
+    expect(game.conversations).toHaveLength(1)
+    expect(game.conversations[0].messages[1].content).toBe('我一直在休息区。')
 
     await game.openAccusation()
+    expect(game.conversations).toEqual([])
     await game.cancelAccusation()
     await game.talk('NPC01')
     expect(game.view?.session.state_version).toBe(9)
-    expect(game.replies).toEqual([])
+    // Re-entering loads the stored history again instead of an in-memory transcript.
+    expect(game.conversations).toHaveLength(1)
+    expect(game.view?.accusation_draft).toEqual(emptyDraft())
   })
 })

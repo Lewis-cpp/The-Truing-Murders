@@ -5,22 +5,31 @@
 
 ## 当前状态
 
-v0.2 把《停电之夜》切片变成了可保存的网页游戏：浏览器开局 → 调查取证 → 审讯并出示证据 →
-刷新或重启后端后继续 → 正式指控 → 固定复盘。所有规则和对白仍是固定内容，
-没有 Agent、模型 SDK 或模型调用。进度保存在 PostgreSQL，每次操作在一个事务内提交，
-数据库失败时页面不会显示保存成功。重开会创建独立的新局，旧局保留为只读。
-交付范围与限制见 [v0.2 交付记录](docs/18-v0.2-delivery.md)。
+v1.0 的规格实现与本地自动化验收已完成，包含全案玩法、关系图与时间线、部署配置、
+响应式布局和可访问性。最新状态见 [实现进度](docs/specs/PROGRESS.md)，
+验证与限制见 [v1.0 交付记录](docs/23-v1.0-delivery.md) 和 [测试报告](docs/test-report.md)。
+真实模型通关与评测、玩家试用和案件预期的真人复核尚未完成。
 
-切片 `2-slice` 让审讯需要判断：追问预设话题会把回答记为未核验证词，可以用证词和证据指出矛盾；
-出示与当前谎言无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
-是否成立都由规则表判定，界面不显示压力和信任数值。指控候选也换成了更像真相的干扰项。
+四个可审讯角色共用同一套模型生成：各自的知识、历史、秘密和承认状态互相隔离，
+长对话、切换角色和重开都不会污染事实；每人的记忆按"授权段"推进——说法、可说知识或出示材料
+变化时，旧段历史退出模型上下文，承认等核心事实每轮由授权内容重建。额度用尽后自动转为固定回复
+（页面提示），调查与结案照常，**不触发任何承认也能得 100 分**。生成默认关闭
+（`LLM_ENABLED=false`），关闭时与 v0.3 的固定模式完全一致；规则与判定始终是固定内容，
+模型输出经服务端检查，没有任何写状态的入口。进度保存在 PostgreSQL，每次操作在一个事务内提交，
+数据库失败时页面不会显示保存成功。待定回复由页面每 1.5 秒轮询，失败降级为固定回复并提示，
+玩家可显式重试（至多两次）。
+记忆机制见 [v0.5 交付记录](docs/21-v0.5-delivery.md)，模型配置见下文[启用模型](#启用模型)。
 
-W1 的离线命令行切片继续保留：1 场景、1 NPC、3 条证据、1 条单层谎言、结构化指控、
-三类判定与固定复盘，进度只在内存，不需要数据库。
+审讯规则与 v0.2 切片一致：追问预设话题记为未核验证词，可以用证词和证据指出矛盾；
+出示与当前谎言层无关的材料或指错矛盾会让角色更戒备，连续两次后角色回避，直到结束审讯。
+同一人物的多层谎言按链推进：击破下一层之前必须先承认上一层；界面不显示压力和信任数值。
+无谎言链的角色（林澄）对任何出示都按无关处理。指控草稿可在指控阶段保存，
+退出后保留，正式提交时被本次内容替换并冻结。
 
-同案的 [完整案件草稿](backend/assets/cases/case_001/v1/full-case-draft.md) 已列出真相、知识权限、
-4 NPC／4 场景／12 条证据／3 条谎言链与评分；全案尚未实现，细节待人工审阅。
-可执行配置为 [W1 案件切片](backend/assets/cases/case_001/v1/slice.json)。
+v0.2 的 [W1 案件切片](docs/18-v0.2-delivery.md) 已退役：`slice.json` 从仓库删除，
+已发布的 `2-slice` 版本行与旧存档保留在数据库中但不可继续（`SAVE_VERSION_UNSUPPORTED`）。
+离线命令行现在直接游玩全案（进度只在内存，不需要数据库）。
+可执行配置为 [全案案件文件](backend/assets/cases/case_001/v1/case.json)（人工预期，待真人审阅）。
 
 网页链路：Vue 页面 → Vite 同源代理 → FastAPI `/api/v1` → PostgreSQL 18。
 
@@ -28,7 +37,7 @@ W1 的离线命令行切片继续保留：1 场景、1 NPC、3 条证据、1 条
 各自带依赖、锁文件和命令，以下命令均在对应子目录内执行。项目按一人独立开发安排，
 排期见 [开发路线图](docs/16-development-roadmap.html)。
 
-## 先玩第一周切片
+## 先玩全案命令行
 
 首次准备 Python 依赖，然后启动。CLI 不需要 `.env`、数据库、Node.js 或模型密钥。
 首次安装可能下载依赖；安装完成后，运行和 W1 测试均可离线进行。
@@ -39,8 +48,8 @@ uv sync --locked
 uv run --offline truing-play
 ```
 
-进入游戏后输入 `look` 看调查点，`help` 看操作。以下是一条调查与审讯路径，
-你也可以先调查 A02，或完全跳过审讯后指控：
+进入游戏后输入 `look` 查看已开放场景与调查点，`help` 看操作。以下是一条 minimal 路径，
+你也可以先集齐证据再审讯，或完全跳过审讯后指控：
 
 ```text
 look
@@ -81,23 +90,22 @@ uv run --offline ruff check src tests
 uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 ```
 
-静态评分样例在 `backend/tests/data/expected/week_one_verdicts.json`，与被测评分函数独立编写；
-覆盖三结局、75分无证据猜测、30／85分边界、错误凶手覆盖高分。
-另检查取证依赖、阻断循环、数值上下界、六种出示顺序、知识投影、重复收益、
-非法动作、结案冻结和实际终端交互。CLI 交互测试禁止套接字连接。
+全案的人工评分与路径预期在 `backend/tests/data/expected/full_case_verdicts.json` 和
+`full_case_paths.json`，与被测规则函数独立编写；覆盖三结局、无招供 100 分、两层谎言的
+正序与逆序、无关与回避、话题与矛盾、六阶段动作矩阵和终端交互。CLI 交互测试禁止套接字连接。
 这些预期尚待真人复核，不冒充人工验收结果。
 
-`.github/workflows/ci.yml` 分三个任务：后端离线任务运行 Ruff 和上述离线检查；
+`.github/workflows/ci.yml` 分四个任务：后端离线任务运行 Ruff 和上述离线检查；
 数据库任务启动与 `compose.yaml` 同一摘要的 PostgreSQL 18 服务，运行完整 pytest；
-前端运行格式、类型、lint、测试和构建。CI 不使用模型密钥。
-交付范围与验证记录见 [W1 交付记录](docs/17-week-one-delivery.md)。
+前端运行格式、类型、lint、测试和构建；E2E 任务构建前端并用真实浏览器验证通关与可访问性。
+分支推送和 PR 触发 CI，历史标签推送不重复触发。CI 不使用模型密钥。
 
 ## 开发环境
 
 采用**数据库用 Docker、前后端本机运行**的方式。Docker 不是架构上的硬性要求，
 但本仓库的标准启动流程使用 Compose 管理 PostgreSQL，不需要另装本机数据库。
-不需要 Redis、消息队列、向量数据库或本地大模型；当前启动与测试不调用模型 API，
-不需要 API 密钥。
+不需要 Redis、消息队列、向量数据库或本地大模型。模型生成默认关闭，启动与测试不调用
+模型 API、不需要 API 密钥；启用方法见[启用模型](#启用模型)。
 
 | 工具 | 本项目基线 | 用途 |
 | --- | --- | --- |
@@ -108,7 +116,7 @@ uv run --offline pytest -q tests/domain tests/application tests/test_cli.py
 | PostgreSQL | 18；当前固定镜像为 18.6 | 开发库 `truing`、测试库 `truing_test` |
 
 Python 和前端的具体依赖版本分别固定在 `backend/uv.lock` 和 `frontend/package-lock.json`。
-前端当前使用 Element Plus 与 Pinia；设计中的 ECharts 与 Vue Router 随首个使用它们的页面安装。
+前端当前使用 Element Plus、Pinia 与 ECharts；单页工作台尚不需要 Vue Router。
 数据库镜像使用摘要固定，升级补丁版本时需要显式更新 `backend/compose.yaml` 中的摘要并重新验证。
 
 本机已有 Python、Node.js 和 Docker，本次新增的 uv 位于 `~/.local/bin/uv`。
@@ -127,7 +135,7 @@ cp .env.example .env
 uv sync --locked
 docker compose up -d --wait
 uv run alembic upgrade head
-uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
+uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 
 cd ../frontend
 npm ci
@@ -164,6 +172,26 @@ npm run dev
 - `GET /api/v1/health`：进程存活检查，不依赖数据库。
 - `GET /api/v1/ready`：真实执行数据库查询，成功返回 200，连接失败返回 503。
 
+### 接口概览
+
+在 v0.2 的会话与审讯接口之上，新增以下只读资源与写接口（均挂在
+`/api/v1/sessions/{session_id}` 下，写接口仍需 `Idempotency-Key` 与
+`X-Expected-State-Version`）：
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/scenes`、`/scenes/{scene_id}` | GET | 已开放场景列表/详情；未开放统一 404 `SCENE_NOT_FOUND` |
+| `/scenes/{scene_id}/investigations` | POST | 指定场景内调查；动作不属于该场景 422 `INVALID_ACTION_REFERENCE` |
+| `/evidence`、`/evidence/{evidence_id}` | GET | 证据背包/详情；未持有与不存在统一 404 |
+| `/npcs`、`/npcs/{npc_id}` | GET | 四名可审讯人物；其余人物不出现 |
+| `/npcs/{npc_id}/conversations` | GET/POST | 固定模式聊天历史（`limit`、`before_seq` 分页）与发起聊天 |
+| `/conversations/{conversation_id}` | GET | 单轮对话（聊天回执的 `Location` 指向它） |
+| `/npcs/{npc_id}/evidence-presentations` | POST | 出示证据，同事务创建一轮对话 |
+| `/relationships`、`/timeline` | GET | 已确认关系图与时间线 |
+| `/accusation-options` | GET | 指控候选（不含答案） |
+| `/accusation-draft` | GET/PUT | 草稿读取与保存（仅指控阶段） |
+| `/conversations/{conversation_id}/reply-retries` | POST | 显式重试一次失败的生成回复（仅限允许重试的降级轮次） |
+
 前端通过 `/api/v1` 代理访问本机 8000 端口，无需配置跨域通配符。
 后端用 HttpOnly 匿名 Cookie 识别访问者，写请求校验 `Origin`（默认允许 5173 和 4173 端口的
 `127.0.0.1` 与 `localhost`，可用 `ALLOWED_ORIGINS` 环境变量覆盖）。
@@ -180,9 +208,49 @@ docker compose stop
 不要在保留存档时加 `-v`，该参数会删除本项目数据库卷。
 容器没有配置开机自启，重启电脑后按上述步骤启动即可。
 
+### 启用模型
+
+生成默认关闭；关闭时页面与 v0.3 完全一致，每轮立即返回固定回复。启用前在 `backend/.env`
+设置以下变量（`.env.example` 有全部默认值，不要提交真实密钥）：
+
+```bash
+LLM_ENABLED=true
+LLM_ENABLED_NPCS=["NPC01"]
+LLM_BASE_URL=https://api.example.com/v1
+LLM_MODEL=（供应商与模型名）
+LLM_API_KEY=（密钥，只存于 .env）
+```
+
+- `LLM_ENABLED=true` 但 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` 缺任一项，后端启动直接失败，不静默降级。
+- 硬预算（整局不变）：单局调用 `LLM_SESSION_CALL_LIMIT=60`、单局 token `LLM_SESSION_TOKEN_LIMIT=200000`；
+  单轮时限 `LLM_TIMEOUT_SECONDS=30`，输出上限 400 token。额度用尽后只返回固定回复，重试返回 429。
+- 只有 `LLM_ENABLED_NPCS` 列表内的角色走模型，其余角色保持固定回复；每个角色的记忆按
+  授权段隔离，旧段历史退出模型上下文，玩家回看不受影响。
+- 密钥不进日志、API 响应或 `llm_attempt` 表；发给模型的 messages 只含该角色获准内容，
+  服务端再做泄漏词表兜底检查，命中即丢弃并回退固定回复。
+- 失败（超时、限流、无效输出、额度不足）都降级为本轮固定回复；失败轮次可由玩家显式重试，
+  至多两次，页面按钮只在服务器允许时出现。
+- 关闭方法：把 `LLM_ENABLED` 改回 `false` 并重启后端，无需清理数据。
+
 ### 检查与测试
 
-先启动数据库，再分别在两个子目录内执行：
+先启动数据库，再分别在两个子目录内执行。浏览器端到端测试（后端目录）需要先构建前端并
+安装 Playwright Chromium，只在需要时显式运行（默认检查排除它们）：
+
+```bash
+cd frontend && npm run build && cd ../backend
+uv run playwright install chromium
+uv run pytest tests/e2e -m e2e
+uv run pytest tests/performance -m performance
+```
+
+真实模型评测（可选，需要模型服务凭据与预算，默认跳过）：
+
+```bash
+RUN_LIVE_LLM_TESTS=1 uv run pytest -m live_llm
+```
+
+其余检查命令：
 
 ```bash
 cd backend
@@ -201,15 +269,17 @@ npm run build
 
 后端检查在真实 PostgreSQL 18 上验证：迁移可升级、可回退且与模型一致；复合外键、唯一效果和唯一结案；
 写入证据后注入故障整体回滚；同键重发、同键异载荷、跨访客访问、过期版本和并发提交；
-API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼容旧存档的处理；迁移带数据往返不丢失追问证词。
+API 完整通关并在重启后续玩；追问、指出矛盾、回避和不兼容旧存档的处理；
+固定模式对话轮次、分页与幂等；草稿保存、保留与提交冻结；迁移带切片数据升级与空库降级。
 前端检查验证写请求协议、断线后查询原请求、保存失败不显示成功、用同一键重试，
-以及追问、指出矛盾、回避提示和旧存档进入大厅。数据库缺失时集成检查直接失败，不跳过。
+以及全案页面的 `data-testid` 契约、四人物审讯、对话记录、关系与时间线、草稿与复盘。
+数据库缺失时集成检查直接失败，不跳过。
 测试通过 `TEST_DATABASE_URL` 使用独立库，要求数据库名以 `_test` 结尾，且不能与开发库相同；
 测试会重建该库的表结构。
 
 pytest 禁止自动加载宿主机插件，避免本机 ROS 的 `PYTHONPATH` 干扰；
 未来引入异步或浏览器插件时需显式通过 `-p` 启用。
-普通检查不使用真实模型；真实模型评测将在对应阶段实现后单独启用。
+普通检查不使用真实模型；真实模型评测套件已实现，需凭据和预算后单独启用。
 
 自动格式化命令：
 
@@ -223,7 +293,7 @@ npm run format
 
 构建产物位于 `frontend/dist/`，不纳入 Git。
 `npm run preview` 可在本机 4173 端口预览构建，后端仍需运行。
-这些命令用于开发验证，尚未配置正式部署。
+这些命令用于开发验证；部署配置与操作见下文“部署与备份”。
 
 ### 数据库迁移
 
@@ -241,15 +311,61 @@ uv run alembic upgrade head
 自动生成的迁移必须检查约束、索引和数据变更，再执行。
 迁移文件保存在 `backend/src/backend/infrastructure/database/migrations/versions/`。
 
-迁移 `0002` 为追问证词和回避增加字段。已有开发库升级后，需要导入新版切片：
+迁移 `0002` 为追问证词和回避增加字段；迁移 `0003` 增加全案需要的静态表与列
+（关系图、时间线、谎言链、人物性格、证据种类与关键标记、场景开放条件）、
+运行表 `conversation` 与 `conversation_message`，并让每个可审讯人物各有一行 `npc_state`。
+已有开发库升级后，需要导入全案案件文件：
 
 ```bash
 uv run alembic upgrade head
-uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
+uv run python -m backend.import_case assets/cases/case_001/v1/case.json
 ```
 
-规则执行版本升为 `w1-slice-2` 后，旧的 `1-slice` 存档原样保留，但不能继续。
+规则执行版本升为 `full-1` 后，旧的 `2-slice` 及更早存档原样保留，但不能继续。
 页面会提示存档无法读取并显示案件列表；玩家确认后，新局取代它成为当前存档。
+注意：`alembic downgrade 0002` 会丢弃全案静态新增列与 `lie_chain`、`relationship`、
+`timeline_event` 三张表（规格只要求空库降级成功）；若在开发库执行过降级再升级，
+需要删除 `case_001` 的 `3-full` 模板行后重新执行上面的导入命令。
+
+### 部署与备份
+
+部署形态是"静态前端 + 单个后端进程 + PostgreSQL"，只有 web 一个对外端口。
+
+```bash
+# 1. 构建前端静态资源（deploy 的 nginx 挂载这个目录）
+cd frontend && npm ci && npm run build && cd ..
+
+# 2. 构建后端镜像
+docker build -t truing-api:latest -f backend/Dockerfile backend
+
+# 3. 准备部署配置
+cp backend/deploy/.env.example backend/deploy/.env
+#    编辑 backend/deploy/.env：数据库口令、ALLOWED_ORIGINS、COOKIE_SECURE 等
+
+# 4. 启动数据库与 API、web
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env up -d --wait db
+
+# 5. 一次性命令：迁移与案件导入（不随容器启动自动执行）
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env run --rm   --entrypoint "" api uv run alembic upgrade head
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env run --rm   --entrypoint "" api uv run python -m backend.import_case assets/cases/case_001/v1/case.json
+
+# 6. 启动 web 与 api
+docker compose -f backend/deploy/compose.yaml --env-file backend/deploy/.env up -d
+```
+
+- 健康检查：`curl http://127.0.0.1:8080/api/v1/health`（进程）与
+  `curl http://127.0.0.1:8080/api/v1/ready`（数据库）。
+- HTTP 演示环境把 `COOKIE_SECURE` 设为 `false`，否则浏览器不带会话 Cookie；
+  走 HTTPS 反代时保持 `true`。
+- 升级：重新构建镜像与前端后，先 `docker compose ... up -d --wait db`，再执行第 5 步的
+  迁移命令，然后 `docker compose ... up -d` 替换 api/web。
+- 备份（与开发库相同的命令，替换端口与口令）：
+
+```bash
+docker compose -f backend/deploy/compose.yaml exec db   pg_dump -U truing -Fc -d truing > backup-$(date +%F).dump
+# 恢复：先停止 api，重建库（或删卷重建），再恢复
+cat backup-2026-11-02.dump | docker compose -f backend/deploy/compose.yaml exec -T db   pg_restore -U truing -d truing --no-owner --clean
+```
 
 ### 常见问题
 
@@ -340,4 +456,11 @@ uv run python -m backend.import_case assets/cases/case_001/v1/slice.json
 - [测试架构与矩阵](docs/14-testing.md)
 - [后端目录与开发边界](docs/15-development-plan.md)
 - [开发路线图（一人开发）](docs/16-development-roadmap.html)
-- [技术栈概览](tech-stack.html)
+- [分阶段实现规格（v0.3～v1.0）](docs/specs/README.md)
+- [v0.3 交付记录](docs/19-v0.3-delivery.md)
+- [v0.4 交付记录](docs/20-v0.4-delivery.md)
+- [v0.5 交付记录](docs/21-v0.5-delivery.md)
+- [v0.6 交付记录](docs/22-v0.6-delivery.md)
+- [v1.0 交付记录](docs/23-v1.0-delivery.md)
+- [实现进度](docs/specs/PROGRESS.md)
+- [测试报告](docs/test-report.md)

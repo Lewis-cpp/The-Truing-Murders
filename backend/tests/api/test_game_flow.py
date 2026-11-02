@@ -5,7 +5,7 @@ from player import Player
 pytestmark = [pytest.mark.api, pytest.mark.integration]
 
 
-def test_full_slice_survives_backend_restart(client, migrated_url, monkeypatch):
+def test_full_case_survives_backend_restart(client, migrated_url, monkeypatch):
     player = Player(client)
     created = player.start().json()
     assert created["result_state_version"] == 1
@@ -15,8 +15,8 @@ def test_full_slice_survives_backend_restart(client, migrated_url, monkeypatch):
     gained = player.investigate("A01").json()
     assert gained["data"]["outcome"]["reason_code"] == "PROGRESS_UPDATED"
     assert [e["evidence_id"] for e in gained["data"]["outcome"]["new_evidence"]] == ["E01"]
-    assert player.investigate("A02").status_code == 201
-    assert player.investigate("A03").status_code == 201
+    player.investigate_all()
+    assert player.load()["session"]["phase"] == "DEEP_INVESTIGATION"
     assert player.talk().status_code == 201
     broken = player.present("E01").json()["data"]
     assert broken["outcome"]["reason_code"] == "LIE_BROKEN"

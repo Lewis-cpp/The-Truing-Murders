@@ -1,0 +1,104 @@
+/* Detective-desk theme for v1.0: Element Plus variables, one motion switch,
+   visible focus. Colors keep a contrast of at least 4.5:1 on their backgrounds
+   (checked with axe-core color-contrast). */
+
+:root {
+  /* The single motion switch every transition and animation must use. */
+  --tm-motion-duration: 180ms;
+
+  /* Primary: dark desk leather; white text on it reads at ~7:1. */
+  --el-color-primary: #6b4226;
+  --el-color-primary-light-3: #8a5f3a;
+  --el-color-primary-light-5: #a5805d;
+  --el-color-primary-light-7: #c2a488;
+  --el-color-primary-light-8: #d1b9a4;
+  --el-color-primary-light-9: #e8dcd0;
+  --el-color-primary-dark-2: #56351e;
+
+  --el-border-radius-base: 4px;
+
+  /* Muted text that still passes 4.5:1 on the page background. */
+  --tm-text-muted: #5f6672;
+}
+
+/* Every transition uses the motion switch. Color and background change instantly
+   (state must be measurable and stable at any moment); only transforms, shadows
+   and borders animate. */
+.el-button,
+.el-card,
+.el-tag,
+.el-alert,
+.el-input__wrapper,
+.el-select__wrapper {
+  transition:
+    transform var(--tm-motion-duration),
+    box-shadow var(--tm-motion-duration),
+    border-color var(--tm-motion-duration);
+}
+
+/* Keyboard focus must always be visible, whatever the control. */
+:focus-visible {
+  outline: 2px solid var(--el-color-primary-dark-2);
+  outline-offset: 2px;
+}
+
+/* Semantic colors must keep 4.5:1 on their light backgrounds. Element Plus ships
+   pastel text for alerts, tags and plain buttons; these darker shades carry the
+   same meaning while passing axe color-contrast. */
+.el-alert .el-alert__title {
+  color: #303133;
+}
+
+.el-alert--success .el-alert__title {
+  color: #3f6b1c;
+}
+
+.el-alert--warning .el-alert__title {
+  color: #7a4d0b;
+}
+
+.el-alert--error .el-alert__title {
+  color: #a13333;
+}
+
+.el-tag.el-tag--success {
+  --el-tag-text-color: #3f6b1c;
+}
+
+.el-tag.el-tag--warning {
+  --el-tag-text-color: #7a4d0b;
+}
+
+.el-tag.el-tag--danger {
+  --el-tag-text-color: #a13333;
+}
+
+.el-tag.el-tag--info {
+  --el-tag-text-color: #5f6672;
+}
+
+.el-button--warning:not(.is-disabled):not(.is-plain) {
+  color: #7a4d0b;
+}
+
+.el-button--warning.is-plain:not(.is-disabled) {
+  color: #7a4d0b;
+}
+
+.el-button--danger.is-plain:not(.is-disabled) {
+  color: #a13333;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tm-motion-duration: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

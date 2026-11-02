@@ -4,7 +4,15 @@ import { describe, expect, it } from 'vitest'
 
 // The build only bundles src/ and public/. Case files and answers live in backend/assets.
 const roots = ['src', 'public'].map((dir) => join(__dirname, '..', dir))
-const markers = ['"truth"', '"scoring"', '"admission_pressure_min"', 'B17', '利用工程检修']
+const markers = [
+  '"truth"',
+  '"scoring"',
+  '"admission_pressure_min"',
+  'B17',
+  '利用工程检修',
+  'core_lie_ids',
+  '我怕B17造假被查',
+]
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
