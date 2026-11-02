@@ -40,6 +40,10 @@ function isPending(round: { generation_status: string }): boolean {
   return PENDING_ROUNDS.includes(round.generation_status)
 }
 
+function isExpired(round: { generation_status: string; deadline_exceeded: boolean }): boolean {
+  return isPending(round) && round.deadline_exceeded
+}
+
 // The newest fallback of this person; older ones stay in the transcript as history.
 const fallbackRound = computed(() => {
   const rounds = game.conversations.filter(
@@ -102,7 +106,10 @@ function contradict() {
             <template v-if="message.speaker === 'PLAYER'">你：{{ message.content }}</template>
             <template v-else>{{ active.name }}：{{ message.content }}</template>
           </p>
-          <p v-if="isPending(round)" class="pending">回复准备中</p>
+          <p v-if="isExpired(round)" data-testid="reply-expired" class="pending">
+            回复未能按时生成，可以继续提问
+          </p>
+          <p v-else-if="isPending(round)" class="pending">回复准备中</p>
         </article>
       </div>
       <template v-if="fallbackRound">

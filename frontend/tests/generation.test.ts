@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import GameView from '../src/views/GameView.vue'
+import { useGameStore } from '../src/stores/game'
 import type { SessionView } from '../src/api/types'
 import { json, stubFetch } from './fixtures'
 
@@ -257,6 +258,79 @@ describe('generation polling', () => {
     const wrapper = await mountView()
     expect(wrapper.find('[data-testid="fallback-notice"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="retry-reply"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('stops waiting for an expired round and says the question can go on', async () => {
+    let polls = 0
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': () =>
+        json(200, { current_session_id: id, session: talkingView([round('PREPARING')]) }),
+      [`GET ${session}/npcs/NPC01/conversations?limit=20`]: () =>
+        json(200, {
+          session_id: id,
+          state_version: 9,
+          data: { items: [round('PREPARING')], next_before_seq: null },
+        }),
+      [`GET ${session}/conversations/${conversationId}`]: () => {
+        polls += 1
+        return json(200, {
+          session_id: id,
+          state_version: 9,
+          data: round('PREPARING', { deadline_exceeded: true }),
+        })
+      },
+    })
+    const wrapper = await mountView()
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(polls).toBe(1)
+    expect(wrapper.find('[data-testid="reply-expired"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it("drops the last person's pending reply after switching to another", async () => {
+    let active = 'NPC01'
+    let polls = 0
+    const other = { ...talkingView().npcs[0], npc_id: 'NPC02', name: '林澄' }
+    const viewOf = () => {
+      const view = talkingView()
+      view.session.active_npc_id = active
+      view.npcs = [view.npcs[0], other] as typeof view.npcs
+      return view
+    }
+    stubFetch({
+      ...base,
+      'GET /api/v1/sessions/current': () =>
+        json(200, { current_session_id: id, session: viewOf() }),
+      [`GET ${session}/npcs/NPC01/conversations?limit=20`]: () =>
+        json(200, {
+          session_id: id,
+          state_version: 9,
+          data: { items: [round('PREPARING')], next_before_seq: null },
+        }),
+      [`GET ${session}/npcs/NPC02/conversations?limit=20`]: () =>
+        json(200, {
+          session_id: id,
+          state_version: 9,
+          data: { items: [], next_before_seq: null },
+        }),
+      [`GET ${session}/conversations/${conversationId}`]: () => {
+        polls += 1
+        return json(200, { session_id: id, state_version: 9, data: round('COMPLETED') })
+      },
+    })
+    const pinia = createPinia()
+    const wrapper = mount(GameView, { global: { plugins: [pinia] }, attachTo: document.body })
+    await flushPromises()
+    const game = useGameStore(pinia)
+    expect(game.pollingId).toBe(conversationId)
+    active = 'NPC02'
+    await game.init()
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(game.pollingId).toBeNull()
+    expect(polls).toBe(0)
+    expect(game.conversations).toEqual([])
     wrapper.unmount()
   })
 })

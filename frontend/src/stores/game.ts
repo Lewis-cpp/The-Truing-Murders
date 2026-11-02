@@ -94,11 +94,16 @@ export const useGameStore = defineStore('game', () => {
         `${base()}/conversations/${conversationId}`,
       )
       const round = body.data
+      // A reply for a round or person the page has since left is dropped, not shown here.
+      if (pollingId.value !== conversationId || round.npc_id !== view.value?.session.active_npc_id)
+        return
       const index = conversations.value.findIndex((item) => item.conversation_id === conversationId)
       if (index >= 0) conversations.value.splice(index, 1, round)
       else conversations.value.push(round)
       // A final state ends the polling; the server writes it, the page only reads it.
-      if (!PENDING_ROUNDS.includes(round.generation_status)) stopPolling()
+      // An expired round only clears on the next write, so waiting longer cannot help.
+      if (!PENDING_ROUNDS.includes(round.generation_status) || round.deadline_exceeded)
+        stopPolling()
     } catch {
       // A failed poll keeps the placeholder; the next tick tries again.
     }
@@ -126,10 +131,13 @@ export const useGameStore = defineStore('game', () => {
     conversations.value = [...page.data.items].sort(
       (left, right) => left.conversation_seq - right.conversation_seq,
     )
-    const waiting = conversations.value.find((round) =>
-      PENDING_ROUNDS.includes(round.generation_status),
+    const waiting = conversations.value.find(
+      (round) => PENDING_ROUNDS.includes(round.generation_status) && !round.deadline_exceeded,
     )
     if (waiting) startPolling(waiting.conversation_id)
+    // A round of another person (the page switched) stops; a just-retried one keeps polling.
+    else if (!conversations.value.some((round) => round.conversation_id === pollingId.value))
+      stopPolling()
   }
 
   async function refresh() {
