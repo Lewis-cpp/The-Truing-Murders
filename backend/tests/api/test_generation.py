@@ -350,6 +350,26 @@ def test_expired_placeholders_are_cleared_without_resending(db, migrated_url, mo
         assert attempts(db) == []
 
 
+def test_a_call_that_outlives_the_deadline_stays_retryable(db, migrated_url, monkeypatch):
+    for key, value in {**LLM_ENV, "LLM_TIMEOUT_SECONDS": "0.2"}.items():
+        monkeypatch.setenv(key, value)
+    with make_client(monkeypatch, migrated_url) as client:
+
+        def slow(call):
+            time.sleep(0.3)
+            return failed("TIMEOUT")
+
+        player, dispatcher = talking(client, FakeGateway(slow))
+        conversation_id = player.chat("你在哪里？").json()["data"]["conversation_id"]
+        dispatcher.run_all()
+        view = round_of(player, conversation_id)
+        assert (view["generation_status"], view["fallback_reason"]) == (
+            "FALLBACK",
+            "MODEL_TIMEOUT",
+        )
+        assert view["can_retry_reply"] is True
+
+
 def test_a_crash_after_dispatch_keeps_unknown_usage_and_never_resends(
     db, migrated_url, monkeypatch
 ):

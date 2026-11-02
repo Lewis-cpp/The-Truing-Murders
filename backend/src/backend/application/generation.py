@@ -162,12 +162,9 @@ def usage_of(db: Session, session_id: uuid.UUID) -> tuple[int, int]:
 
 
 def _conditions_hold(db: Session, conversation: Conversation) -> bool:
-    """Step 2/6 guard: the round is still the current, unexpired, in-phase one."""
+    """Step 2/6 guard: the round is still the current, in-phase one (the deadline is
+    checked by the caller: an expired round in an unchanged context stays retryable)."""
     if conversation.generation_status != "GENERATING":
-        return False
-    if conversation.generation_deadline_at is not None and _utcnow() >= (
-        conversation.generation_deadline_at
-    ):
         return False
     row = db.get_one(GameSession, conversation.session_id)
     if row.phase != Phase.INTERROGATION or row.active_npc_id != conversation.character_id:
@@ -510,7 +507,10 @@ def _settle(
             if result.text is not None
             else None
         )
-        if still_valid and result.text is not None and rejection is None:
+        expired = conversation.generation_deadline_at is not None and now >= (
+            conversation.generation_deadline_at
+        )
+        if still_valid and not expired and result.text is not None and rejection is None:
             attempt.status = "SUCCEEDED"
             attempt.validation_status = "ACCEPTED"
             attempt.error_code = None
@@ -547,7 +547,7 @@ def _settle(
             return
         if still_valid:
             # The call finished but the candidate is unusable: the fixed reply wins.
-            internal = rejection or result.error_code
+            internal = rejection or result.error_code or ("TIMEOUT" if expired else None)
             attempt.status = "FAILED" if result.error_code is not None else "SUCCEEDED"
             attempt.validation_status = "REJECTED" if rejection is not None else "NOT_APPLICABLE"
             attempt.error_code = internal
