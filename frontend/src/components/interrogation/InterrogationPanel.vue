@@ -5,7 +5,6 @@ import { useGameStore } from '../../stores/game'
 
 const game = useGameStore()
 const question = ref('')
-const evidenceId = ref('')
 const testimonyId = ref('')
 const contradictionEvidenceId = ref('')
 const actions = computed(() => game.view?.session.available_actions ?? [])
