@@ -2,8 +2,10 @@
 import { computed } from 'vue'
 import { ElButton, ElCard, ElTag, ElTooltip } from 'element-plus'
 import { useGameStore } from '../../stores/game'
+import { useStageStore } from '../../stores/stage'
 
 const game = useGameStore()
+const stage = useStageStore()
 const canInvestigate = computed(
   () => game.view?.session.available_actions.includes('INVESTIGATE') ?? false,
 )
@@ -11,8 +13,10 @@ const canInvestigate = computed(
 
 <template>
   <div data-testid="scene-list">
+    <!-- One room on stage at a time; the others stay mounted so the HUD switch is instant. -->
     <div
       v-for="scene in game.view?.scenes"
+      v-show="scene.scene_id === stage.sceneId"
       :key="scene.scene_id"
       :data-testid="`scene-${scene.scene_id}`"
     >

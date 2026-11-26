@@ -19,7 +19,7 @@ def no_horizontal_scroll(page) -> bool:
 def start_and_open_scene(page):
     page.get_by_test_id("start-game").click()
     page.get_by_test_id("action-A01").click()
-    page.get_by_test_id("evidence-E01").wait_for()
+    page.get_by_test_id("evidence-E01").wait_for(state="attached")
 
 
 @pytest.mark.parametrize(("width", "height"), VIEWPORTS)
@@ -35,7 +35,7 @@ def test_two_hundred_percent_zoom_keeps_everything_usable(page):
     start_and_open_scene(page)
     assert no_horizontal_scroll(page)
     page.get_by_test_id("action-A02").click()
-    page.get_by_test_id("evidence-E02").wait_for()
+    page.get_by_test_id("evidence-E02").wait_for(state="attached")
 
 
 def test_core_path_with_the_keyboard_only(page):
@@ -54,7 +54,10 @@ def test_core_path_with_the_keyboard_only(page):
     for action, evidence in (("A01", "E01"), ("A02", "E02")):
         tab_to(f"action-{action}")
         page.keyboard.press("Enter")
-        page.get_by_test_id(f"evidence-{evidence}").wait_for()
+        page.get_by_test_id(f"evidence-{evidence}").wait_for(state="attached")
+    tab_to("dossier-suspects")
+    page.keyboard.press("Enter")
+    page.get_by_test_id("talk-NPC01").wait_for()
     tab_to("talk-NPC01")
     page.keyboard.press("Enter")
     page.get_by_test_id("interrogation-panel").wait_for()
