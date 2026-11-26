@@ -1,29 +1,81 @@
-/* Detective-desk theme for v1.0: Element Plus variables, one motion switch,
-   visible focus. Colors keep a contrast of at least 4.5:1 on their backgrounds
-   (checked with axe-core color-contrast). */
+/* v2.0 rainy-institute theme: five locked colors on top of the official Element Plus
+   dark variables (html.dark), one motion switch, visible focus. Text keeps at least
+   4.5:1 on the panel surface; text never sits directly on a backdrop image, which
+   axe cannot measure. */
 
 :root {
   /* The single motion switch every transition and animation must use. */
-  --tm-motion-duration: 180ms;
+  --tm-motion-duration: 220ms;
 
-  /* Primary: dark desk leather; white text on it reads at ~7:1. */
-  --el-color-primary: #6b4226;
-  --el-color-primary-light-3: #8a5f3a;
-  --el-color-primary-light-5: #a5805d;
-  --el-color-primary-light-7: #c2a488;
-  --el-color-primary-light-8: #d1b9a4;
-  --el-color-primary-light-9: #e8dcd0;
-  --el-color-primary-dark-2: #56351e;
+  --tm-ink: #0f1319;
+  --tm-surface: #121822;
+  --tm-paper: #ece8df;
+  --tm-amber: #d49a45;
+  /* #c94a38 fails 4.5:1 with both light and dark text: decoration only.
+     Red text uses the lighter shade, red buttons the darker one with paper text. */
+  --tm-crimson: #c94a38;
+  --tm-crimson-text: #e0705f;
+  --tm-crimson-solid: #a83a2b;
+  --tm-text-muted: #9aa5b5;
+  --tm-border: rgba(201, 184, 150, 0.22);
+}
 
+html.dark {
+  --el-bg-color: var(--tm-surface);
+  --el-bg-color-overlay: var(--tm-surface);
+  --el-bg-color-page: var(--tm-ink);
+  --el-text-color-primary: var(--tm-paper);
+  --el-text-color-regular: var(--tm-paper);
+  --el-text-color-secondary: var(--tm-text-muted);
+  --el-border-color: var(--tm-border);
+  --el-border-color-light: var(--tm-border);
+  --el-border-color-lighter: var(--tm-border);
   --el-border-radius-base: 4px;
 
-  /* Muted text that still passes 4.5:1 on the page background. */
-  --tm-text-muted: #5f6672;
+  --el-color-primary: var(--tm-amber);
+  --el-color-primary-light-3: color-mix(in srgb, var(--tm-amber) 70%, var(--tm-surface));
+  --el-color-primary-light-5: color-mix(in srgb, var(--tm-amber) 50%, var(--tm-surface));
+  --el-color-primary-light-7: color-mix(in srgb, var(--tm-amber) 30%, var(--tm-surface));
+  --el-color-primary-light-8: color-mix(in srgb, var(--tm-amber) 20%, var(--tm-surface));
+  --el-color-primary-light-9: color-mix(in srgb, var(--tm-amber) 10%, var(--tm-surface));
+  --el-color-primary-dark-2: color-mix(in srgb, var(--tm-amber) 80%, white);
+
+  --el-color-danger: var(--tm-crimson-text);
+  --el-color-danger-light-3: color-mix(in srgb, var(--tm-crimson-text) 70%, var(--tm-surface));
+  --el-color-danger-light-5: color-mix(in srgb, var(--tm-crimson-text) 50%, var(--tm-surface));
+  --el-color-danger-light-7: color-mix(in srgb, var(--tm-crimson-text) 30%, var(--tm-surface));
+  --el-color-danger-light-8: color-mix(in srgb, var(--tm-crimson-text) 20%, var(--tm-surface));
+  --el-color-danger-light-9: color-mix(in srgb, var(--tm-crimson-text) 10%, var(--tm-surface));
+  --el-color-danger-dark-2: var(--tm-crimson-solid);
+}
+
+/* Amber, warning yellow and light red are too bright for white text: dark text on them. */
+.el-button--primary,
+.el-button--warning,
+.el-button--danger {
+  --el-button-hover-text-color: var(--tm-ink);
+  --el-button-active-text-color: var(--tm-ink);
+}
+
+.el-button--primary:not(.is-plain),
+.el-button--warning:not(.is-plain) {
+  --el-button-text-color: var(--tm-ink);
+}
+
+.el-button--danger:not(.is-plain) {
+  --el-button-text-color: var(--tm-paper);
+  --el-button-bg-color: var(--tm-crimson-solid);
+  --el-button-border-color: var(--tm-crimson-solid);
+  --el-button-hover-text-color: var(--tm-paper);
+  --el-button-hover-bg-color: color-mix(in srgb, var(--tm-crimson-solid) 85%, black);
+  --el-button-hover-border-color: color-mix(in srgb, var(--tm-crimson-solid) 85%, black);
+  --el-button-active-text-color: var(--tm-paper);
+  --el-button-active-bg-color: color-mix(in srgb, var(--tm-crimson-solid) 75%, black);
 }
 
 /* Every transition uses the motion switch. Color and background change instantly
-   (state must be measurable and stable at any moment); only transforms, shadows
-   and borders animate. */
+   (state must be measurable and stable at any moment); only transforms, shadows,
+   borders and opacity animate. */
 .el-button,
 .el-card,
 .el-tag,
@@ -38,55 +90,8 @@
 
 /* Keyboard focus must always be visible, whatever the control. */
 :focus-visible {
-  outline: 2px solid var(--el-color-primary-dark-2);
+  outline: 2px solid var(--tm-amber);
   outline-offset: 2px;
-}
-
-/* Semantic colors must keep 4.5:1 on their light backgrounds. Element Plus ships
-   pastel text for alerts, tags and plain buttons; these darker shades carry the
-   same meaning while passing axe color-contrast. */
-.el-alert .el-alert__title {
-  color: #303133;
-}
-
-.el-alert--success .el-alert__title {
-  color: #3f6b1c;
-}
-
-.el-alert--warning .el-alert__title {
-  color: #7a4d0b;
-}
-
-.el-alert--error .el-alert__title {
-  color: #a13333;
-}
-
-.el-tag.el-tag--success {
-  --el-tag-text-color: #3f6b1c;
-}
-
-.el-tag.el-tag--warning {
-  --el-tag-text-color: #7a4d0b;
-}
-
-.el-tag.el-tag--danger {
-  --el-tag-text-color: #a13333;
-}
-
-.el-tag.el-tag--info {
-  --el-tag-text-color: #5f6672;
-}
-
-.el-button--warning:not(.is-disabled):not(.is-plain) {
-  color: #7a4d0b;
-}
-
-.el-button--warning.is-plain:not(.is-disabled) {
-  color: #7a4d0b;
-}
-
-.el-button--danger.is-plain:not(.is-disabled) {
-  color: #a13333;
 }
 
 @media (prefers-reduced-motion: reduce) {

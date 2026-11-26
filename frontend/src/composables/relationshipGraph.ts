@@ -14,13 +14,15 @@ export function graphOption(graph: RelationshipGraph): EChartsOption {
       target: edge.to_character_id,
       value: edge.relationship_type,
       lineStyle: {
+        color: '#9aa5b5',
         type:
           edge.assertion_kind === 'TESTIMONY' || edge.credibility === 'UNVERIFIED'
             ? 'dashed'
             : 'solid',
       },
     })),
-    label: { show: true },
+    // Dark stage: paper-colored labels, muted links (theme.css --tm-paper / --tm-text-muted).
+    label: { show: true, color: '#ece8df' },
     roam: true,
   }
   return { series: [series] } as EChartsOption

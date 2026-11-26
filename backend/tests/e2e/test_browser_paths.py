@@ -19,12 +19,20 @@ def start(page):
     page.get_by_test_id("action-A01").wait_for()
 
 
+def show_room_of(page, action):
+    """The stage shows one room at a time: switch to the room that owns the action."""
+    room = page.locator(f'[data-testid^="scene-S"]:has([data-testid="action-{action}"])')
+    scene_id = room.get_attribute("data-testid").removeprefix("scene-")
+    page.get_by_test_id(f"scene-tab-{scene_id}").click()
+
+
 def investigate(page, actions=ACTIONS):
     for action in actions:
-        button = page.get_by_test_id(f"action-{action}")
-        button.click()
+        show_room_of(page, action)
+        page.get_by_test_id(f"action-{action}").click()
         page.locator(f'[data-testid="action-{action}"][data-completed="true"]').wait_for()
-        page.get_by_test_id(f"evidence-E{action[1:]}").wait_for()
+        # The bag lives in the closed dossier: the item is there, not on screen.
+        page.get_by_test_id(f"evidence-E{action[1:]}").wait_for(state="attached")
 
 
 def present(page, evidence):
@@ -80,6 +88,7 @@ def test_partial_and_wrong_verdicts(page, culprit, weapon, motive, steps, catego
 def test_two_layer_confession_with_fixed_replies_and_reload(page):
     start(page)
     investigate(page)
+    page.get_by_test_id("dossier-suspects").click()
     page.get_by_test_id("talk-NPC01").click()
     panel = page.get_by_test_id("interrogation-panel")
     panel.wait_for()
@@ -93,5 +102,6 @@ def test_two_layer_confession_with_fixed_replies_and_reload(page):
     page.get_by_test_id("interrogation-panel").filter(has_text="用镇纸打了陆衡").wait_for()
     assert "出示证据：E08" in page.get_by_test_id("conversation-log").inner_text()
     page.get_by_test_id("leave-interrogation").click()
+    page.get_by_test_id("dossier-board").click()
     page.get_by_test_id("timeline-T07").wait_for()
     assert "时间未知" in page.get_by_test_id("timeline-T07").inner_text()
